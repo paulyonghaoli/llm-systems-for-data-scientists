@@ -1,0 +1,147 @@
+id: ret-l2-ivf
+title: "IVF search, and the list you forgot to open"
+lesson: modules/03-retrieval/02-exact-and-approximate
+description: |
+  Implement IVF search over a small corpus with the clusters already built.
+
+  `LISTS` maps each centroid index to the documents assigned to it, `CENTROIDS`
+  holds the centroid vectors and `DOCS` the document vectors. Score the query
+  against every centroid, open the `nprobe` nearest, and rank only the
+  documents inside them.
+
+  The starter opens the nearest **one** list regardless of what `nprobe` says.
+  That is not a contrived bug — it is what a hardcoded `[:1]`, an `argmax`
+  where an `argsort` was needed, or an off-by-one slice all produce, and it
+  fails silently: results come back, they are ranked correctly, and they are
+  drawn from a fraction of the corpus the caller did not agree to.
+
+  Document 7 is the fourth-best document for this query and it lives in the
+  *second* nearest list, which is the whole point. The nearest list holds three
+  perfectly plausible documents, so a single-list search returns a full-looking
+  result set with the answer missing and nothing to indicate it.
+
+setup_code: |
+  # 12 documents in 3 dimensions, clustered into 4 lists.
+  DOCS = [
+      [0.90, 0.30, 0.10], [0.85, 0.35, 0.05], [0.88, 0.28, 0.15],
+      [0.20, 0.95, 0.10], [0.25, 0.90, 0.15], [0.15, 0.92, 0.20],
+      [0.60, 0.55, 0.55], [0.62, 0.50, 0.60], [0.58, 0.58, 0.52],
+      [0.10, 0.20, 0.95], [0.15, 0.25, 0.92], [0.05, 0.18, 0.98],
+  ]
+  CENTROIDS = [
+      [0.877, 0.310, 0.100],
+      [0.200, 0.923, 0.150],
+      [0.600, 0.543, 0.557],
+      [0.100, 0.210, 0.950],
+  ]
+  LISTS = {0: [0, 1, 2], 1: [3, 4, 5], 2: [6, 7, 8], 3: [9, 10, 11]}
+
+  QUERY = [0.85, 0.40, 0.20]
+  GOLD = 7
+
+  def dot(a, b):
+      """Dot product of two equal-length vectors."""
+      return sum(x * y for x, y in zip(a, b))
+
+  def exact_top_k(query, k=5):
+      """Brute-force ranking over every document, for comparison."""
+      scored = sorted(range(len(DOCS)), key=lambda i: -dot(query, DOCS[i]))
+      return scored[:k]
+
+starter_code: |
+  def ivf_search(query, nprobe=2, k=5):
+      """Rank documents from the nprobe nearest lists."""
+      ranked_centroids = sorted(
+          range(len(CENTROIDS)), key=lambda c: -dot(query, CENTROIDS[c])
+      )
+      # Bug: takes the single nearest list whatever nprobe says.
+      opened = ranked_centroids[:1]
+
+      candidates = []
+      for c in opened:
+          candidates.extend(LISTS[c])
+      candidates.sort(key=lambda i: -dot(query, DOCS[i]))
+      return candidates[:k]
+
+
+  def scanned(query, nprobe):
+      """How many documents an ivf_search call would score."""
+      ranked = sorted(range(len(CENTROIDS)), key=lambda c: -dot(query, CENTROIDS[c]))
+      return sum(len(LISTS[c]) for c in ranked[:nprobe])
+
+
+  print("exact top-5      ", exact_top_k(QUERY))
+  print("ivf nprobe=1     ", ivf_search(QUERY, nprobe=1))
+  print("ivf nprobe=2     ", ivf_search(QUERY, nprobe=2))
+  print("scanned at n=2   ", scanned(QUERY, 2), "of", len(DOCS))
+
+tests: |
+  exact = exact_top_k(QUERY)
+  assert GOLD in exact, "sanity: brute force should find the gold document"
+
+  # nprobe must actually control how many lists are opened.
+  one = ivf_search(QUERY, nprobe=1)
+  two = ivf_search(QUERY, nprobe=2)
+  assert one != two, (
+      "nprobe=1 and nprobe=2 returned the same results. The gold document "
+      "lives in the second-nearest list, so opening one more list has to "
+      "change the answer — if it does not, nprobe is being ignored."
+  )
+
+  assert GOLD in two, (
+      f"document {GOLD} is the correct answer and sits in the second-nearest "
+      f"list, but nprobe=2 returned {two}. Open the nprobe nearest centroids, "
+      "not the nearest one."
+  )
+  assert GOLD not in one, (
+      "with only one list open the gold document is unreachable, so nprobe=1 "
+      "must not return it — this is the loss an approximate index takes"
+  )
+
+  # Opening every list must reproduce exact search exactly.
+  full = ivf_search(QUERY, nprobe=len(CENTROIDS))
+  assert full == exact, (
+      f"with every list open IVF must equal brute force, got {full} against "
+      f"{exact}. If it does not, the ranking inside the opened lists is wrong "
+      "rather than the list selection."
+  )
+
+  # Results ranked by score, best first.
+  scores = [dot(QUERY, DOCS[i]) for i in two]
+  assert scores == sorted(scores, reverse=True), (
+      f"results must be ordered best first, got scores {scores}"
+  )
+
+  # And the cost has to move with nprobe, or nothing was saved.
+  assert scanned(QUERY, 1) < scanned(QUERY, 2) < scanned(QUERY, 4), (
+      "scanning more lists must score more documents; that is the price being "
+      "paid for the extra quality"
+  )
+  assert scanned(QUERY, 4) == len(DOCS), (
+      "opening every list should scan the whole corpus"
+  )
+
+hints:
+  - "`nprobe` is a parameter and the slice is hardcoded. Compare the two."
+  - "`ranked_centroids[:nprobe]`"
+  - "Nothing else in the function is wrong — the ranking and the top-k slice are already correct."
+
+solution: |
+  def ivf_search(query, nprobe=2, k=5):
+      """Rank documents from the nprobe nearest lists."""
+      ranked_centroids = sorted(
+          range(len(CENTROIDS)), key=lambda c: -dot(query, CENTROIDS[c])
+      )
+      opened = ranked_centroids[:nprobe]
+
+      candidates = []
+      for c in opened:
+          candidates.extend(LISTS[c])
+      candidates.sort(key=lambda i: -dot(query, DOCS[i]))
+      return candidates[:k]
+
+
+  def scanned(query, nprobe):
+      """How many documents an ivf_search call would score."""
+      ranked = sorted(range(len(CENTROIDS)), key=lambda c: -dot(query, CENTROIDS[c]))
+      return sum(len(LISTS[c]) for c in ranked[:nprobe])

@@ -1,0 +1,272 @@
+id: ret-l2
+lesson: modules/03-retrieval/02-exact-and-approximate
+title: "3.2 - Exact and approximate search"
+questions:
+  - id: q1
+    type: single
+    difficulty: easy
+    prompt: >-
+      An index vendor reports "95% recall" for their ANN configuration. What
+      has been measured?
+    options:
+      - text: "Agreement with exact search — how much of brute force's top k the index also returned."
+        correct: true
+        explanation: >-
+          It is measured without labels, which is why it is universally
+          available and universally quoted. It says how faithfully the index
+          imitates brute force, and nothing about whether users get answers.
+      - text: "The fraction of queries whose correct answer was returned."
+        explanation: >-
+          That requires labelled queries, which a vendor does not have for your
+          corpus. It is the number you care about and the one you have to
+          measure yourself.
+      - text: "The fraction of the corpus scanned per query."
+        explanation: >-
+          That is the cost side of the tradeoff, usually reported separately as
+          a speedup or a scan fraction.
+      - text: "The proportion of documents correctly assigned to their nearest centroid."
+        explanation: >-
+          Assignment quality affects the result but is not what the reported
+          number measures.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      In the experiment, an IVF index reproduced 92% of exact search's results
+      and delivered end-task recall of 0.398 against exact search's 0.489. Why
+      is the quality loss so much larger than the agreement number suggests?
+    options:
+      - text: "The documents an approximate index misses are disproportionately the marginal ones, and correct answers are often marginal too."
+        correct: true
+        explanation: >-
+          Both populations live near cluster boundaries. Exact search's
+          tenth-ranked result is usually irrelevant and costs nothing to lose;
+          the gold document frequently sits in the same fragile region, and the
+          misses are correlated with the answers.
+      - text: "Because agreement is computed at a different k from recall."
+        explanation: >-
+          Both are measured at k = 10 in the experiment. The divergence is
+          about *which* documents are lost, not how many.
+      - text: "Because the index returns documents the exact search never saw."
+        explanation: >-
+          It cannot: IVF only ever returns documents from the corpus, and any
+          document it returns brute force also scored. The loss is one-way.
+      - text: "Because end-task recall is a noisier measurement."
+        explanation: >-
+          It is measured on 176 queries and is noisier in absolute terms, but
+          the gap here is systematic and appears at every point on the curve.
+
+  - id: q3
+    type: single
+    difficulty: hard
+    prompt: >-
+      An IVF index on transformed vectors scanned 7.4% of the corpus and
+      returned recall@10 of 0.511. Exact search on the raw, untransformed
+      vectors scanned 100% and returned 0.489. What is the lesson?
+    options:
+      - text: "Getting the geometry right mattered more than being exact — approximation on good vectors beat exhaustiveness on bad ones."
+        correct: true
+        explanation: >-
+          Two lines of post-processing bought more than thirteen times the
+          compute. It also reframes the usual question: before asking how to
+          search faster, ask whether the space being searched is the right one.
+      - text: "IVF is generally more accurate than brute force."
+        explanation: >-
+          It cannot be, on the same vectors. IVF's results are a subset of what
+          brute force scores, so it is bounded above by exact search on those
+          vectors. The comparison here crosses two different vector sets.
+      - text: "The exact search implementation must have a bug."
+        explanation: >-
+          Exact search on the raw vectors is correct; the raw vectors are just
+          a worse representation. Both numbers are right.
+      - text: "The transformed index would beat exact search on transformed vectors too."
+        explanation: >-
+          It does not — exact search on transformed vectors reaches 0.614,
+          above the approximate 0.511. Approximation still costs something; it
+          just costs less than bad geometry.
+
+  - id: q4
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why does clustering the raw embeddings produce a worse partition than
+      clustering the centred, component-stripped ones?
+    options:
+      - text: "k-means partitions by Euclidean distance, and the raw cloud is dominated by a shared direction carrying no topical information."
+        correct: true
+        explanation: >-
+          Most of the partition gets spent separating documents along an axis
+          that says nothing about what they are about. Measured: agreement at
+          one probe was 0.631 for transformed vectors against 0.401 for raw,
+          and the raw partition left an empty list.
+      - text: "Raw vectors are not normalised, so distances are meaningless."
+        explanation: >-
+          They are L2-normalised. The problem is where the cloud sits relative
+          to the origin, not the vector lengths.
+      - text: "k-means requires zero-mean input to converge."
+        explanation: >-
+          It converges either way. Centring changes what the clusters describe,
+          not whether the algorithm terminates.
+      - text: "Because 384 dimensions is too many for k-means."
+        explanation: >-
+          Dimensionality makes clustering harder in general, but both
+          configurations here have the same dimensionality and only one
+          partitions well.
+
+  - id: q5
+    type: multi
+    difficulty: medium
+    prompt: >-
+      Which of these are true of an exact (brute force) search over a corpus of
+      2,419 documents with 384-dimension vectors?
+    options:
+      - text: "It has no retrieval error attributable to the index."
+        correct: true
+        explanation: >-
+          It scores every candidate, so whatever it returns is exactly the top
+          k under the metric. Any quality problem is in the embedding or the
+          query, not in the search.
+      - text: "It requires no build step that can go stale."
+        correct: true
+        explanation: >-
+          Adding documents means appending rows. There are no centroids fitted
+          to an older distribution, which is the failure mode that makes an
+          aged index degrade silently.
+      - text: "Its cost grows linearly with corpus size."
+        correct: true
+        explanation: >-
+          Which is why it eventually stops being viable — at a million
+          documents the same vectors are 1.54 GB of memory traffic per query.
+      - text: "It is always slower than an approximate index."
+        explanation: >-
+          At this scale it is roughly a tenth of a millisecond, and an IVF
+          index needed to scan half the corpus to match its own exact baseline.
+          Halving a tenth of a millisecond is not a saving worth a dependency.
+      - text: "It cannot be used with quantised vectors."
+        explanation: >-
+          It works fine with int8, which is a quarter of the memory traffic at
+          a measured cosine fidelity of 0.99984.
+
+  - id: q6
+    type: single
+    difficulty: hard
+    prompt: >-
+      Latency is over budget, and lowering `nprobe` fixes it. What is the
+      danger?
+    options:
+      - text: "Quality degrades on exactly the hard queries, and no metric you currently collect will show it."
+        correct: true
+        explanation: >-
+          Latency improves, error rates do not move, and nothing raises. The
+          damage lands on marginal queries, which are the ones the system was
+          already worst at. This is why the labelled query set has to exist
+          before the pressure to tune arrives.
+      - text: "The index will need rebuilding."
+        explanation: >-
+          `nprobe` is a search-time parameter and changes nothing about the
+          stored structure. That is exactly what makes it so easy to turn down.
+      - text: "Results will be returned in the wrong order."
+        explanation: >-
+          Ranking within the opened lists is still correct. The problem is
+          which documents were eligible to be ranked at all.
+      - text: "Memory usage will increase."
+        explanation: >-
+          It decreases, since fewer vectors are read per query.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: >-
+      You want an exact spatial index — a k-d tree or ball tree — over
+      384-dimension embeddings. What happens?
+    options:
+      - text: "It degrades to scanning essentially everything, so it costs more than brute force and returns the same answers."
+        correct: true
+        explanation: >-
+          Space-partitioning trees stop pruning effectively somewhere around
+          ten to twenty dimensions. At 384 there is no exact spatial index
+          worth having, which is why every practical structure at this
+          dimensionality is approximate by necessity.
+      - text: "It works well and is the standard approach for embeddings."
+        explanation: >-
+          It is the standard approach in low-dimensional spatial data and does
+          not transfer here.
+      - text: "It cannot be built at all."
+        explanation: >-
+          It builds without complaint. That is the trap — it works, it is just
+          pointless.
+      - text: "It returns approximate results."
+        explanation: >-
+          A k-d tree is exact. The problem is its cost, not its correctness.
+
+  - id: q8
+    type: numeric
+    difficulty: easy
+    prompt: >-
+      An IVF index has 64 lists and you set `nprobe` to 8. Assuming lists are
+      of roughly equal size, what percentage of the corpus is scanned per
+      query? Answer as a number.
+    answer: 12.5
+    tolerance: 0.6
+    explanation: >-
+      8 of 64 lists is 12.5%. The experiment measured 13.1% at this setting on
+      the raw vectors, the difference being that real lists are not equal in
+      size — the largest held 120 documents against a standard deviation of 23.
+
+  - id: q9
+    type: single
+    difficulty: hard
+    prompt: >-
+      Your corpus has been growing for six months without the index being
+      rebuilt. Retrieval quality complaints are increasing. What is the most
+      likely mechanism, and what signal would have caught it without labels?
+    options:
+      - text: "The centroids describe the old distribution; the distance from each query to its nearest centroid, tracked over time, would have shown it rising."
+        correct: true
+        explanation: >-
+          New documents get absorbed into a partition fitted to a corpus that
+          no longer exists, and nothing errors. The nearest-centroid distance
+          is available without any labelled data, which makes it the practical
+          monitor for exactly this decay.
+      - text: "The embeddings drifted because the model changed."
+        explanation: >-
+          Possible, and it is why the model should be pinned by commit — but a
+          pinned model produces identical vectors and the partition still ages.
+      - text: "The vectors are gradually losing precision through quantisation."
+        explanation: >-
+          Quantisation is applied once and is not cumulative. Re-quantising the
+          same vector gives the same result.
+      - text: "The corpus is now too large for the number of lists."
+        explanation: >-
+          A contributing factor, and it is addressed by the same rebuild — but
+          the primary mechanism is that the centroids no longer describe where
+          the documents are.
+
+  - id: q10
+    type: single
+    difficulty: medium
+    prompt: >-
+      Should the geometry transform from lesson 3.1 be applied before the index
+      is built, or at query time only?
+    options:
+      - text: "Before, and to both sides — the centroids must be fitted to the same vectors the queries will be compared against."
+        correct: true
+        explanation: >-
+          Fitting the partition on raw vectors and then transforming only the
+          query gives a partition organised by the shared direction and a query
+          living in a different space. That is worse than either choice made
+          consistently, and it is the natural mistake when a transform is added
+          to a system that already has an index.
+      - text: "At query time only, so the stored vectors stay compatible with other consumers."
+        explanation: >-
+          Compatibility is a real concern and the answer is to store both or to
+          version the index — not to compare vectors from two different spaces.
+      - text: "Either, as the transform is orthogonal to the clustering."
+        explanation: >-
+          It is not orthogonal to it at all. The experiment shows the partition
+          quality changing substantially with the transform.
+      - text: "Neither — approximate indexes should always be built on raw model output."
+        explanation: >-
+          The measurement says the opposite: transformed vectors gave a better
+          partition, better agreement at every probe count, and no empty lists.

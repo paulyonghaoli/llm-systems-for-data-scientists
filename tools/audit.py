@@ -136,6 +136,27 @@ def main() -> int:
         text = p.read_text(encoding="utf-8")
         rel = p.relative_to(ROOT).as_posix()
 
+        # 0. No stray control characters.
+        #
+        # Gate 28. Writing a lesson through a Python string literal turns an
+        # un-escaped `\text` into a TAB and `\frac` into TAB + "rac", because
+        # `\t` and `\f` are escape sequences. The LaTeX in a maths block then
+        # renders as garbage while every other gate passes: the word count is
+        # unchanged, the sections are all present, the components resolve, and
+        # nothing raises. Only opening the page shows it.
+        #
+        # Tabs are included deliberately. No file in docs/ or curriculum/ uses
+        # one for indentation, so a tab here is always the corruption rather
+        # than a formatting choice.
+        for m in re.finditer(r"[\x00-\x09\x0b-\x1f]", text):
+            line = text.count("\n", 0, m.start()) + 1
+            problems.append(
+                f"{rel}:{line}: control character {m.group().encode().hex()} in prose — "
+                f"almost certainly an un-escaped LaTeX backslash (\\t, \\f, \\a) "
+                f"that a Python string literal ate"
+            )
+            break  # one report per file is enough to send someone to look
+
         # 1. Every embedded component resolves.
         for eid in EX_RE.findall(text):
             referenced_ex.add(eid)

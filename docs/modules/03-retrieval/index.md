@@ -42,7 +42,7 @@ system, they are what closes a gap this large.
 ## Lessons
 
 1. [3.1 Embedding geometry: the space is not shaped how you think](01-embedding-geometry.md) — **available**
+2. [3.2 Exact and approximate search](02-exact-and-approximate.md) — **available**
 
-Lessons 3.2–3.8 (exact and approximate search, BM25, hybrid fusion and RRF,
-chunking, reranking, groundedness and citation, retrieval metrics) are in
-progress.
+Lessons 3.3–3.8 (BM25, hybrid fusion and RRF, chunking, reranking,
+groundedness and citation, retrieval metrics) are in progress.

@@ -1,0 +1,129 @@
+id: ret-l2-agreement
+title: "Two quality numbers that disagree"
+lesson: modules/03-retrieval/02-exact-and-approximate
+description: |
+  Measure the same index two ways and watch them tell different stories.
+
+  `EXACT` holds what brute force returned for eight queries, `APPROX` what the
+  index returned for the same eight, and `GOLD` the document that actually
+  answers each one.
+
+  Two functions to write:
+
+  - `agreement_at_k` — the fraction of exact search's results the index also
+    returned, averaged over queries. This is what ANN benchmarks call recall
+    and what index libraries report.
+  - `recall_at_k` — the fraction of queries where a gold document is in the
+    returned results. This is what the user experiences.
+
+  The starter computes `agreement_at_k` correctly and then defines
+  `recall_at_k` as the same thing against a different list, which is the
+  conflation the lesson is about. Read its comment before fixing it.
+
+  These eight queries are constructed so the two numbers diverge sharply.
+  That is not a trick — §G measures the same divergence on the real corpus,
+  where agreement of 0.92 came with end-task recall down by a fifth.
+
+setup_code: |
+  # Top-5 results for eight queries, from brute force and from the index.
+  EXACT = [
+      [10, 22, 31, 44, 57], [11, 23, 32, 45, 58], [12, 24, 33, 46, 59],
+      [13, 25, 34, 47, 60], [14, 26, 35, 48, 61], [15, 27, 36, 49, 62],
+      [16, 28, 37, 50, 63], [17, 29, 38, 51, 64],
+  ]
+  # The index keeps the top of each list and loses the tail. Cheap to do,
+  # and the tail is where several of the answers live.
+  APPROX = [
+      [10, 22, 31, 44, 99], [11, 23, 32, 45, 98], [12, 24, 33, 97, 96],
+      [13, 25, 34, 95, 94], [14, 26, 35, 93, 92], [15, 27, 36, 91, 90],
+      [16, 28, 37, 89, 88], [17, 29, 38, 87, 86],
+  ]
+  # The document that actually answers each query.
+  GOLD = [
+      [57], [23], [59], [47], [35], [62], [50], [29],
+  ]
+
+starter_code: |
+  def agreement_at_k(exact, approx, k=5):
+      """Mean fraction of exact search's top k that the index also returned."""
+      total = 0.0
+      for e, a in zip(exact, approx):
+          total += len(set(e[:k]) & set(a[:k])) / k
+      return total / len(exact)
+
+
+  def recall_at_k(results, gold, k=5):
+      """Fraction of queries with a gold document in the top k."""
+      # Bug: this is agreement_at_k wearing a different name. It measures
+      # OVERLAP with the gold list rather than whether ANY gold document was
+      # found, so a query with one correct answer can never score above 1/k
+      # and the number it produces is not recall of anything.
+      total = 0.0
+      for r, g in zip(results, gold):
+          total += len(set(r[:k]) & set(g)) / k
+      return total / len(results)
+
+
+  print("agreement@5        ", round(agreement_at_k(EXACT, APPROX), 3))
+  print("recall@5, exact    ", round(recall_at_k(EXACT, GOLD), 3))
+  print("recall@5, approx   ", round(recall_at_k(APPROX, GOLD), 3))
+
+tests: |
+  agree = agreement_at_k(EXACT, APPROX)
+  assert abs(agree - 0.65) < 1e-9, (
+      f"agreement@5 came out {agree:.3f}, expected 0.65 — the index keeps the "
+      "first four of two lists and the first three of the other six"
+  )
+
+  exact_recall = recall_at_k(EXACT, GOLD)
+  assert exact_recall == 1.0, (
+      f"recall@5 on exact search came out {exact_recall:.3f}, expected 1.0. "
+      "Every gold document is present in the exact results, so recall is 1.0 "
+      "whatever k is. A value of 0.2 means the function is dividing by k and "
+      "measuring overlap instead of asking whether any gold document is there."
+  )
+
+  approx_recall = recall_at_k(APPROX, GOLD)
+  assert abs(approx_recall - 0.375) < 1e-9, (
+      f"recall@5 on the index came out {approx_recall:.3f}, expected 0.375 — "
+      "three of the eight queries still have their answer"
+  )
+
+  # The result the lesson is about.
+  assert agree > approx_recall, (
+      "agreement should be well above end-task recall on this data"
+  )
+  assert agree - approx_recall > 0.25, (
+      f"agreement {agree:.3f} against recall {approx_recall:.3f}. The index "
+      "reproduced 65% of brute force's results and answers 37.5% of the "
+      "queries — reporting the first number as though it were quality "
+      "overstates what the system does by a factor of nearly two."
+  )
+
+  # Recall must be insensitive to where in the list the answer sits.
+  shuffled = [list(reversed(r)) for r in APPROX]
+  assert recall_at_k(shuffled, GOLD) == approx_recall, (
+      "recall@k asks whether a gold document is in the top k at all, so "
+      "reordering within the top k cannot change it"
+  )
+
+hints:
+  - "Recall@k is a yes/no question per query: is any gold document in the top k?"
+  - "`total += 1.0 if set(r[:k]) & set(g) else 0.0`"
+  - "`agreement_at_k` is already correct — do not change it."
+
+solution: |
+  def agreement_at_k(exact, approx, k=5):
+      """Mean fraction of exact search's top k that the index also returned."""
+      total = 0.0
+      for e, a in zip(exact, approx):
+          total += len(set(e[:k]) & set(a[:k])) / k
+      return total / len(exact)
+
+
+  def recall_at_k(results, gold, k=5):
+      """Fraction of queries with a gold document in the top k."""
+      total = 0.0
+      for r, g in zip(results, gold):
+          total += 1.0 if set(r[:k]) & set(g) else 0.0
+      return total / len(results)
