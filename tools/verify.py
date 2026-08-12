@@ -50,6 +50,10 @@ GATES: list[tuple[str, list[str], Path]] = [
     # own checks on the first run, which is when a check is least trustworthy)
     ("25 corpus phenomena", [PY, "tools/verify_corpus.py"], ROOT),
     ("26 corpus verifier", [PY, "tools/test_verify_corpus.py"], ROOT),
+    # 27 the recorded embeddings are intact and dense retrieval resolves the
+    # vocabulary mismatch BM25 cannot — which is also the sharpest test that
+    # the pooling is right, since wrong pooling still yields unit vectors
+    ("27 embedding fixture", [PY, "tools/verify_embeddings.py"], ROOT),
     # 07 nav coverage and orphans live here too
     ("19 audit", [PY, "tools/audit.py"], ROOT),
 ]

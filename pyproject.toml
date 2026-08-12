@@ -26,8 +26,17 @@ docs = [
 ]
 # Only ever installed by hand, to re-record pinned fixtures. Never in CI:
 # gate 13 runs the whole suite with the network switched off.
+#
+# onnxruntime rather than torch/sentence-transformers: the ONNX export plus a
+# hand-written pooling step is a few hundred MB instead of a few gigabytes, and
+# the pooling is worth writing out anyway — bge-small uses CLS pooling, not the
+# mean pooling most code defaults to, and getting that wrong degrades the
+# vectors without breaking anything visibly.
 record = [
     "tiktoken>=0.7",
+    "onnxruntime>=1.17",
+    "tokenizers>=0.15",
+    "huggingface_hub>=0.20",
 ]
 
 [tool.setuptools.packages.find]

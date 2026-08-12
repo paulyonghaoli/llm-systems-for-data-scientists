@@ -87,6 +87,24 @@ def break_superseded(docs, queries):
                     and d["doc_id"][:-3] + "-v2" in ids)], queries
 
 
+def break_topic_distinctness(docs, queries):
+    """Give every policy the same body, keeping only its own title.
+
+    This is the defect the corpus actually shipped with, and none of the
+    phenomenon checks noticed: with twelve interchangeable policies, "BM25
+    cannot find the gold document" is true for the wrong reason. Restoring it
+    here is the only way to know the new check would have caught it.
+    """
+    shared = None
+    for d in docs:
+        if d["type"] != "policy":
+            continue
+        if shared is None:
+            shared = d["text"].split(".", 1)[1]
+        d["text"] = d["text"].split(".", 1)[0] + "." + shared
+    return docs, queries
+
+
 def break_integrity(docs, queries):
     """Point a gold reference at a document that does not exist."""
     for q in queries:
@@ -141,6 +159,7 @@ MUTATIONS = [
     ("contradiction", break_contradiction),
     ("unanswerable", break_unanswerable_scores),
     ("unanswerable", break_unanswerable_gold),
+    ("topic_distinctness", break_topic_distinctness),
     (None, break_integrity),
 ]
 

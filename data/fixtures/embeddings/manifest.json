@@ -1,0 +1,85 @@
+{
+  "recorded_on": "2026-08-12",
+  "model": "BAAI/bge-small-en-v1.5",
+  "revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+  "licence": "mit",
+  "dim": 384,
+  "max_position_embeddings": 512,
+  "max_content_tokens": 510,
+  "onnxruntime_version": "1.28.0",
+  "pooling": "cls",
+  "query_instruction": null,
+  "note": "Real embeddings for data/corpus, recorded once by experiments/record_embeddings.py and shipped int8. Never called at test time. Pooling and query-prefix were chosen by measuring all four combinations on the 200-query benchmark, not by assumption.",
+  "pooling_decision": {
+    "cls_bare": {
+      "n": 176,
+      "recall_at_10": 0.48863636363636365,
+      "mrr_at_10": 0.28503562409812405
+    },
+    "cls_instruction": {
+      "n": 176,
+      "recall_at_10": 0.4772727272727273,
+      "mrr_at_10": 0.2582747113997114
+    },
+    "mean_bare": {
+      "n": 176,
+      "recall_at_10": 0.5227272727272727,
+      "mrr_at_10": 0.3084257756132756
+    },
+    "mean_instruction": {
+      "n": 176,
+      "recall_at_10": 0.5340909090909091,
+      "mrr_at_10": 0.3172641594516594
+    }
+  },
+  "pooling_significance": {
+    "baseline": "cls_bare",
+    "test": "exact two-sided McNemar on recall@10 hit flags",
+    "b_only": 12,
+    "a_only": 4,
+    "discordant": 16,
+    "p_value": 0.0768,
+    "significant_at_0.05": false
+  },
+  "chosen": "cls_bare",
+  "documents": {
+    "n": 2419,
+    "order": "matches data/corpus/documents.jsonl line order",
+    "int8_cosine_fidelity": 0.999845
+  },
+  "queries": {
+    "n": 200,
+    "order": "matches data/corpus/queries.jsonl line order"
+  },
+  "retrieval_after_quantisation": {
+    "n": 176,
+    "recall_at_10": 0.48863636363636365,
+    "mrr_at_10": 0.28344832251082247
+  },
+  "chunkings": {
+    "fixed_128": {
+      "size": 128,
+      "overlap": 0,
+      "n_chunks": 7082,
+      "int8_cosine_fidelity": 0.999844
+    },
+    "fixed_256": {
+      "size": 256,
+      "overlap": 0,
+      "n_chunks": 4025,
+      "int8_cosine_fidelity": 0.999849
+    },
+    "fixed_256_ov64": {
+      "size": 256,
+      "overlap": 64,
+      "n_chunks": 4188,
+      "int8_cosine_fidelity": 0.999845
+    },
+    "fixed_510": {
+      "size": 510,
+      "overlap": 0,
+      "n_chunks": 2450,
+      "int8_cosine_fidelity": 0.999845
+    }
+  }
+}

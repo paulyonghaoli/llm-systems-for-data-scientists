@@ -33,6 +33,7 @@ Run directly, or as gate 25 via `tools/verify.py`.
 
 from __future__ import annotations
 
+import itertools
 import json
 import math
 import pathlib
@@ -156,8 +157,8 @@ def main() -> int:
     failures: list[str] = []
     rows: list[tuple[str, int, str, str, bool]] = []
 
-    def record(kind: str, measured: str, expect: str, ok: bool) -> None:
-        rows.append((kind, len(by_kind[kind]), measured, expect, ok))
+    def record(kind: str, measured: str, expect: str, ok: bool, n: int | None = None) -> None:
+        rows.append((kind, len(by_kind[kind]) if n is None else n, measured, expect, ok))
         if not ok:
             failures.append(f"{kind}: measured {measured}, expected {expect}")
 
@@ -273,6 +274,73 @@ def main() -> int:
            "strictly lower", mu < ma)
     empty = all(not q["gold_doc_ids"] for q in qs)
     record("unanswerable", f"gold list empty for all {len(qs)}", "100%", empty)
+
+    # --- topic distinctness ------------------------------------------------
+    # This check exists because every check above once passed on a corpus where
+    # all twelve policies shared one body and differed only in their title.
+    # Nothing above noticed: "BM25 does not find the gold document" is
+    # satisfied just as well by documents being indistinguishable as by a
+    # genuine register gap, and "the gold document has a near-identical
+    # sibling" was satisfied by the wrong sibling. Every one of those was a
+    # necessary condition standing in for a sufficient one.
+    #
+    # The invariant that actually pins it down: a policy's own superseded
+    # revision must be more like it than any policy on a different subject.
+    # Without that, "retrieve the right topic" is not a question the corpus
+    # can pose.
+    # Measured over *distinctive* vocabulary, not all of it. Plain Jaccard on a
+    # sixty-word FAQ is dominated by the function words and stock phrasing any
+    # two customer-facing documents share -- it read 0.74 between unrelated
+    # topics purely on "the", "you", "we" and "days", which says nothing about
+    # whether the documents are about the same thing. Dropping terms that occur
+    # in more than a fifth of the corpus leaves the vocabulary that actually
+    # distinguishes a subject.
+    # Boilerplate is defined *within* a type, not across the corpus. A
+    # corpus-wide cutoff never filters anything shared by the nineteen policies
+    # and nothing else -- their common preamble and filler occur in well under
+    # a fifth of 2,419 documents, so they counted as distinctive and the
+    # measure stayed dominated by exactly the text it was meant to ignore.
+    # What distinguishes one policy is what most *policies* do not say.
+    def boilerplate(group: list[dict]) -> set[str]:
+        counts = Counter(w for d in group for w in words[d["doc_id"]])
+        return {w for w, c in counts.items() if c > 0.5 * len(group)}
+
+    by_type = defaultdict(list)
+    for d in docs:
+        by_type[d["type"]].append(d)
+    stock = {ty: boilerplate(group) for ty, group in by_type.items()}
+
+    def distinctive(doc: dict) -> set[str]:
+        return words[doc["doc_id"]] - stock[doc["type"]]
+
+    topical = [d for d in docs if d["type"] in ("policy", "faq")]
+    policies = [d for d in docs if d["type"] == "policy"]
+    same_topic: list[float] = []
+    cross_topic: list[float] = []
+    for a, b in itertools.combinations(topical, 2):
+        if a["type"] != b["type"]:
+            continue
+        j = jaccard(distinctive(a), distinctive(b))
+        if a["facts"]["topic"] == b["facts"]["topic"]:
+            # Only policies have revisions; two FAQs on one topic would be a
+            # duplicate, not a supersession.
+            if a["type"] == "policy":
+                same_topic.append(j)
+        else:
+            cross_topic.append(j)
+    # Both sides can be empty -- a corpus with no revisions has no same-topic
+    # pairs at all. Reported rather than raised: the mutation test deletes
+    # every superseded policy, and an IndexError from min() on an empty list
+    # is not a description of what is wrong with the corpus.
+    if not same_topic or not cross_topic:
+        record("topic_distinctness",
+               f"{len(same_topic)} revision pairs, {len(cross_topic)} cross-topic pairs",
+               "both non-empty", False, n=len(policies))
+    else:
+        worst_same, best_cross = min(same_topic), max(cross_topic)
+        record("topic_distinctness",
+               f"revisions {worst_same:.2f} vs different topics {best_cross:.2f}",
+               "revision closer", worst_same > best_cross, n=len(policies))
 
     # --- report ------------------------------------------------------------
     width = max(len(r[0]) for r in rows)

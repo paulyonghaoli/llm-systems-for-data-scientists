@@ -359,6 +359,7 @@ CI was red. `tools/check_one.py <exercise-id>` is the way to iterate on one item
 | 24 | **Every exercise field compiles** — setup, starter, solution and tests must all parse | a `SyntaxError` in author-written scaffolding, which shows the learner an error in code they did not write about something the exercise is not teaching |
 | 25 | **Corpus phenomena are measured** — each of the seven planted phenomena is checked by a property it implies, using an untuned BM25 | a corpus that is *labelled* with a phenomenon it does not contain, which would make every retrieval result in Modules 3–4 a measurement of nothing |
 | 26 | **Gate 25 can fail** — nine mutations each destroy one phenomenon, and gate 25 must catch every one | a check that has only ever passed, which is indistinguishable from a check that cannot fail |
+| 27 | **Embedding fixture** — shapes, row order and int8 fidelity hold, and dense retrieval beats BM25 on the vocabulary-mismatch slice | a fixture whose rows have drifted out of line with the corpus, and wrong pooling — which still produces unit-norm vectors that merely retrieve worse |
 
 Gates 12–18 are specific to this subject; 1–11, 19–20 and 22 are inherited; 21 and 23 are ours from the sibling robotics curriculum.
 
@@ -530,6 +531,48 @@ hold, and `data/corpus/README.md` carries the blunt version: the prose is
 template-generated rather than hand-written, and a retriever that scores well
 here has been shown to handle seven specific planted difficulties and nothing
 else.
+
+### Amendment 2 — dense retrieval does *not* resolve vocabulary mismatch (2026-08-12)
+
+The bulleted list above claims "vocabulary mismatch that dense retrieval
+resolves and BM25 does not". **The first half of that is withdrawn.** Measured
+on the recorded fixture, over the full 2,419-document corpus:
+
+| | recall@10 on the vocabulary-mismatch slice |
+|---|---:|
+| BM25 | 0.033 |
+| dense (bge-small-en-v1.5, 384d) | 0.300 |
+
+Dense retrieval is **nine times** better than lexical here and still misses
+**70%** of the slice. "Resolves" was wrong.
+
+**This was not a corpus defect, and the distinction cost three rebuilds to
+establish.** Two genuine defects were found and fixed along the way — all
+twelve policies shared one body, and the FAQs were worse still at up to
+byte-identical across topics — but neither moved the number materially (0.13 →
+0.33 → 0.30). What settled it: strip *every word* of filler, reduce the problem
+to picking among **twelve** candidate topics, and bge-small still gets the
+right one only **55.6%** of the time. Against 2,419 documents, 0.30 is the
+model's ceiling.
+
+The threshold in gate 27 was 0.50, set from what "resolves" has to mean. It was
+**not lowered to meet the measurement** — the claim was rewritten and the gate
+now tests the relationship that is actually true: dense must beat lexical by at
+least 3× and clear 0.20 absolute. A threshold moved quietly to match a
+disappointing result is the exact failure this project's gates exist to
+prevent, and it is more tempting when the result is your own.
+
+**This improves the curriculum rather than damaging it.** "Embeddings solve
+vocabulary mismatch" is the comfortable version and it is false. The true
+version — a large gain that is nowhere near sufficient alone — is what
+motivates everything Module 3 goes on to teach: hybrid retrieval, reranking,
+and filtering by document type. Course I now has a measured reason for those
+techniques to exist instead of presenting them as good practice.
+
+One consequence for lesson 3.x: **chunking does not rescue this.** Measured
+across all four shipped chunkings, chunk-level retrieval was equal to or
+*worse* than document-level (`fixed_510` 0.333, `fixed_256` 0.233). That was a
+prediction of mine that the fixture falsified, and it belongs in the lesson.
 
 ---
 

@@ -92,6 +92,300 @@ POLICY_TOPICS = [
 ]
 
 
+#: Per-topic policy content and the customer-register questions that should
+#: retrieve it.
+#:
+#: Both halves exist for the same reason. Every policy used to share one body,
+#: varying only in its title, which made twelve topics into one document twelve
+#: times -- so no query could pick a topic, and gate 25 was satisfied by
+#: documents being *indistinguishable* rather than by any phenomenon being
+#: present. That is a necessary condition passing for a sufficient one.
+#:
+#: `rules` are written in operational register: consignment, carriage charge,
+#: service commitment. `questions` are written the way a customer would ask,
+#: deliberately sharing as little vocabulary as possible with the rules they
+#: are supposed to retrieve -- that gap *is* the vocabulary-mismatch
+#: phenomenon, and it is why lexical retrieval should fail on them while a
+#: dense retriever should not. Every rule set mentions {days} so the
+#: contradicting FAQ always has a number to disagree with.
+POLICY_RULES: dict[str, dict[str, list[str]]] = {
+    "hold_release": {
+        "rules": [
+            "An address verification hold suspends movement of the consignment "
+            "for up to {hours} hours while the delivery point is confirmed.",
+            "Where confirmation is not obtained within {hours} hours, the "
+            "consignment is returned to the originating depot and the sender "
+            "is notified.",
+            "Release of a held consignment requires authorisation from the "
+            "depot manager and is recorded against the consignment record.",
+            "Representations against a hold must be made within {days} days of "
+            "the hold being raised.",
+        ],
+        "questions": [
+            "why is my parcel stuck and nobody can tell me when it will move again",
+            "who is allowed to let my package go once it has been stopped",
+            "how long before you send it back if you cannot check the address",
+        ],
+    },
+    "address_verification": {
+        "rules": [
+            "A consignment is flagged for address verification where the "
+            "delivery point cannot be matched against the postcode register.",
+            "Two contact attempts are made on consecutive working days before "
+            "the consignment is treated as undeliverable.",
+            "Flagged consignments are staged separately from the outbound flow "
+            "and are not loaded until the exception is cleared.",
+            "An unresolved verification exception is escalated after {days} days.",
+        ],
+        "questions": [
+            "you say you cannot find my street, what happens to my delivery now",
+            "how many times will someone try to reach me about where to leave it",
+            "my postcode is a new build and is not on your system yet, will it still arrive",
+        ],
+    },
+    "refund_eligibility": {
+        "rules": [
+            "The carriage charge is refunded where the service commitment is "
+            "missed by more than {hours} hours.",
+            "Refunds are not payable where the delay arises from circumstances "
+            "outside the reasonable control of the carrier, including severe "
+            "weather and industrial action.",
+            "A refund application must be submitted within {days} days of the "
+            "original service date.",
+            "Refunds are credited to the account that funded the original "
+            "carriage charge.",
+        ],
+        "questions": [
+            "can I get the postage money back if it turned up late",
+            "how late does something have to be before you pay anything out",
+            "you were late but you are blaming the snow, do I still get anything",
+        ],
+    },
+    "damage_claims": {
+        "rules": [
+            "Damage must be reported within {days} days of the delivery scan.",
+            "Photographic evidence of both the item and its outer packaging is "
+            "required before an assessment is opened.",
+            "Original packaging must be retained for inspection until the "
+            "assessment is concluded.",
+            "Assessments are concluded within {hours} hours of the evidence "
+            "being received in full.",
+        ],
+        "questions": [
+            "my item turned up smashed, what do I need to do about it",
+            "do I have to keep the box if the thing inside is broken",
+            "how long have I got to tell you something arrived in bits",
+        ],
+    },
+    "redelivery": {
+        "rules": [
+            "Three delivery attempts are made on consecutive working days.",
+            "Following the final attempt the consignment is transferred to the "
+            "nominated collection point and held for {days} days.",
+            "Consignments not collected within the holding period are returned "
+            "to the sender at the sender's cost.",
+            "A redelivery may be rebooked up to {hours} hours before the next "
+            "scheduled attempt.",
+        ],
+        "questions": [
+            "how many times will the driver come back if I am not in",
+            "nobody was home when you called, what happens to my parcel now",
+            "how long will you hang onto it before sending it back to the shop",
+        ],
+    },
+    "dangerous_goods": {
+        "rules": [
+            "Lithium cells, aerosols and flammable liquids may not be carried "
+            "without a prior written declaration.",
+            "Undeclared restricted items are removed from the network and "
+            "destroyed, and the sender remains liable for the carriage charge.",
+            "A declaration must be lodged at least {hours} hours before "
+            "collection.",
+            "Repeat breaches are reviewed within {days} days and may result in "
+            "withdrawal of the account.",
+        ],
+        "questions": [
+            "am I allowed to post a spare laptop battery",
+            "can I send perfume or is that one of the banned things",
+            "what happens if I sent something I was not supposed to send",
+        ],
+    },
+    "proof_of_delivery": {
+        "rules": [
+            "A signature is captured at the point of handover and stored "
+            "against the consignment record.",
+            "Where a safe place is used, a photograph is captured in place of a "
+            "signature.",
+            "Proof of delivery records are retained for {days} days and may be "
+            "requested by the sender at any point within that period.",
+            "Requests are fulfilled within {hours} hours of receipt.",
+        ],
+        "questions": [
+            "how can I prove the thing actually got there",
+            "the driver left it round the back, is there any record of that",
+            "can somebody send me a copy of who signed for it",
+        ],
+    },
+    "weekend_service": {
+        "rules": [
+            "The standard service operates Monday to Friday and excludes public "
+            "holidays.",
+            "Transit times are quoted in working days, and Saturdays, Sundays "
+            "and public holidays are not counted.",
+            "A premium weekend service is available at surcharge and must be "
+            "booked at least {hours} hours in advance.",
+            "Bookings may be amended up to {days} days before the collection date.",
+        ],
+        "questions": [
+            "will anything turn up on a saturday",
+            "does the bank holiday count towards the days you quoted me",
+            "can I pay extra to have it brought at the weekend",
+        ],
+    },
+    "oversize": {
+        "rules": [
+            "Consignments exceeding 30 kilograms, or two metres in the longest "
+            "dimension, are handled as palletised freight.",
+            "Palletised freight is delivered kerbside only, and the recipient "
+            "is responsible for moving the goods from the kerb.",
+            "A tail lift must be requested at least {hours} hours before the "
+            "collection window.",
+            "Access restrictions must be notified at least {days} days in advance.",
+        ],
+        "questions": [
+            "my thing is huge and heavy, will anyone carry it into the house",
+            "at what point does something get too big for a normal delivery",
+            "do I need to find someone to help me get it off the lorry",
+        ],
+    },
+    "collection_points": {
+        "rules": [
+            "A consignment may be diverted to a nominated collection point "
+            "before the first delivery attempt.",
+            "Photographic identification matching the addressee is required at "
+            "the point of collection.",
+            "Consignments are held at the collection point for {days} days "
+            "before being returned to the sender.",
+            "A diversion request takes effect within {hours} hours.",
+        ],
+        "questions": [
+            "can you drop it at a shop near me instead of my house",
+            "what do I need to take with me when I go and get it",
+            "how long will the shop keep hold of it before it goes back",
+        ],
+    },
+    "insurance": {
+        "rules": [
+            "Liability is limited to 50 pounds per consignment unless a higher "
+            "value is declared before despatch.",
+            "A declared value above the default attracts a premium calculated "
+            "as a percentage of the declared amount.",
+            "A declaration made after despatch has no effect on liability.",
+            "Claims against a declared value must be lodged within {days} days, "
+            "and are acknowledged within {hours} hours.",
+        ],
+        "questions": [
+            "how much are you actually on the hook for if you lose my stuff",
+            "can I pay a bit more to cover something expensive",
+            "I never said what it was worth, what can I claim now",
+        ],
+    },
+    "returns": {
+        "rules": [
+            "A consignment refused by the recipient is returned to the sender "
+            "at the sender's cost.",
+            "The reason for refusal is recorded against the consignment record "
+            "at the point of refusal.",
+            "Refused consignments are held at the depot for {days} days before "
+            "the return leg is despatched.",
+            "A sender may request interception within {hours} hours of the "
+            "refusal being recorded.",
+        ],
+        "questions": [
+            "the person would not take it off the driver, who pays to bring it back",
+            "am I allowed to turn a delivery away at the door",
+            "what happens to something that gets sent back to the seller",
+        ],
+    },
+}
+
+
+#: Customer-facing answers, one per topic. These exist to be *wrong* half the
+#: time -- see `faq_entry` -- but they still have to be about their own
+#: subject. Sharing one body across twelve topics made every FAQ an equally
+#: good match for any customer question, which is not a contradiction
+#: phenomenon, just a duplicate.
+#:
+#: Written in the customer register on purpose: an FAQ is the document a
+#: customer question *sounds* like, so it competes with the policy that
+#: actually governs. That competition is the point. What is not the point is
+#: twelve copies of it.
+FAQ_CONTENT: dict[str, tuple[str, str]] = {
+    "hold_release": (
+        "Why has my parcel stopped moving?",
+        "If we need to check the delivery address we pause your parcel for up "
+        "to {hours} hours. If we still cannot confirm it, we send it back to "
+        "the depot it started from.",
+    ),
+    "address_verification": (
+        "What happens if you cannot find my address?",
+        "We try to reach you twice on working days. If we still cannot confirm "
+        "where to deliver, the parcel is held and then returned after {days} days.",
+    ),
+    "refund_eligibility": (
+        "Can I get my postage back if you were late?",
+        "If we miss the promised time by more than {hours} hours you can claim "
+        "the delivery charge back. Ask us within {days} days.",
+    ),
+    "damage_claims": (
+        "My item arrived broken, what do I do?",
+        "Tell us within {days} days and send photos of the item and the box. "
+        "Keep the packaging until we have finished looking at it.",
+    ),
+    "redelivery": (
+        "What happens if I am out when you call?",
+        "The driver tries three times on working days, then leaves it at a "
+        "nearby collection point for {days} days.",
+    ),
+    "dangerous_goods": (
+        "What am I not allowed to send?",
+        "Batteries, aerosols and anything flammable have to be declared at "
+        "least {hours} hours before we collect. Undeclared items are destroyed "
+        "and you still pay the postage.",
+    ),
+    "proof_of_delivery": (
+        "How do I know my parcel was delivered?",
+        "We take a signature, or a photo if it was left somewhere safe. We keep "
+        "that for {days} days and can send you a copy.",
+    ),
+    "weekend_service": (
+        "Do you deliver at weekends?",
+        "The standard service runs Monday to Friday. Weekend delivery costs "
+        "extra and has to be booked {hours} hours ahead.",
+    ),
+    "oversize": (
+        "What if my item is very large?",
+        "Anything over 30 kilograms or two metres travels as freight and is "
+        "left at the kerb. Ask for a tail lift {hours} hours before collection.",
+    ),
+    "collection_points": (
+        "Can you leave it at a shop instead?",
+        "Yes, you can send it to a collection point before the first delivery "
+        "attempt. Bring photo identification. It waits there {days} days.",
+    ),
+    "insurance": (
+        "What if you lose something valuable?",
+        "We cover 50 pounds unless you tell us it is worth more before it is "
+        "sent. Claims have to be made within {days} days.",
+    ),
+    "returns": (
+        "What if the person refuses my parcel?",
+        "It comes back to you and you pay for the return leg. We hold it at the "
+        "depot for {days} days first.",
+    ),
+}
+
+
 def _para(rng: random.Random, sentences: list[str]) -> str:
     return " ".join(sentences)
 
@@ -235,10 +529,20 @@ FILLER = {
 #: So the range is per type: policies run long, release notes run short, and
 #: each spans roughly a factor of three from end to end.
 FILLER_RANGE = {
-    "policy":    (6, 22),
+    # Deliberately low. Policies are the topic-bearing documents, and the
+    # filler pool is shared across every topic, so a generous range buried four
+    # sentences of actual policy under twenty paragraphs of boilerplate: the
+    # cross-topic Jaccard reached 0.73, *higher* than the 0.61 floor between a
+    # policy and its own superseded predecessor. Dense vectors built by mean
+    # pooling over that text describe the boilerplate, not the topic.
+    "policy":    (1, 6),
     "handbook":  (5, 20),
     "agreement": (4, 16),
-    "faq":       (3, 12),
+    # Low for the same reason as policies: an FAQ carries about sixty words of
+    # topic-specific content, and a generous draw from the shared pool buried
+    # it. Cross-topic FAQ similarity was averaging 0.72 and reaching 1.00 --
+    # byte-identical documents on different subjects.
+    "faq":       (1, 5),
     "incident":  (3, 12),
     "shipment":  (2, 11),
     "release":   (2, 9),
@@ -268,19 +572,10 @@ def policy_doc(rng: random.Random, topic: tuple[str, str], version: int,
     days = rng.choice([7, 14, 21, 28])
     body = [
         f"{title} policy, version {version}, effective {effective}.",
-        f"This policy governs how a {_register_word('parcel', 'policy')} is "
-        f"handled once an {_register_word('address_check', 'policy')} has been "
-        f"raised against it.",
-        f"An {_register_word('address_check', 'policy')} pauses movement for up "
-        f"to {hours} hours while the delivery point is confirmed.",
-        f"Where confirmation is not obtained within {hours} hours, the "
-        f"consignment is returned to the originating depot and the customer is "
-        f"notified.",
-        f"A claim for {_register_word('refund', 'policy')} arising from an "
-        f"{_register_word('delay', 'policy')} must be submitted within {days} "
-        f"days of the original service date.",
-        f"Claims submitted after {days} days are assessed at the discretion of "
-        f"the depot manager and are not guaranteed.",
+        f"This policy governs the handling of a "
+        f"{_register_word('parcel', 'policy')} in respect of {title.lower()}.",
+        *(rule.format(hours=hours, days=days)
+          for rule in POLICY_RULES[key]["rules"]),
     ]
     if superseded_by:
         body.insert(1, f"This version is superseded by {superseded_by} and is "
@@ -306,16 +601,12 @@ def faq_entry(rng: random.Random, topic: tuple[str, str], hours: int, days: int,
     # register gets the wrong answer confidently.
     stated_hours = hours + 24 if contradicts else hours
     stated_days = days - 7 if contradicts else days
+    question, answer = FAQ_CONTENT[key]
     body = [
-        f"How long can my {_register_word('parcel', 'faq')} be held?",
-        f"If there is an {_register_word('address_check', 'faq')} on your "
-        f"{_register_word('parcel', 'faq')}, we hold it for up to "
-        f"{stated_hours} hours while we confirm where it is going.",
-        f"If we cannot confirm the address in that time, the "
-        f"{_register_word('parcel', 'faq')} goes back to the depot it came from.",
-        f"If your delivery was {_register_word('late', 'faq')} because of a "
-        f"{_register_word('delay', 'faq')}, you can ask for your "
-        f"{_register_word('refund', 'faq')} within {stated_days} days.",
+        question,
+        answer.format(hours=stated_hours, days=stated_days),
+        f"If you are not sure, the tracking page shows the current status of "
+        f"your {_register_word('parcel', 'faq')}.",
     ]
     return {
         "doc_id": f"faq-{key}" + ("-conflict" if contradicts else ""),
@@ -386,6 +677,18 @@ def shipment_record(rng: random.Random, shipment: str, depot: str, carrier: str,
         f"Origin hub: {depot}. Carrier: {carrier}. Current status: {status}.",
         f"This consignment is handled under the operating procedures of the "
         f"{depot} depot.",
+        # The record notes *that* the consignment was held and never *why*.
+        # That is what makes it a distractor rather than an answer: it carries
+        # the rare consignment id and the query word both, so BM25 ranks it
+        # above the incident report that actually explains the hold.
+        #
+        # It also has to be here rather than in the query, because the honest
+        # version of this phenomenon is a document that competes on the merits.
+        # Before this line the distractor shared only the id, and once the
+        # policies stopped all repeating the word "held" its inverse document
+        # frequency rose far enough that BM25 simply found the incident report.
+        f"The consignment was held at {depot} pending exception review; see the "
+        f"incident record for the reason code.",
         "Scan history is retained for ninety days from the final movement.",
     ]
     return {
@@ -526,7 +829,15 @@ def build(seed: int = SEED) -> tuple[list[dict], list[dict]]:
                                     rng.choice(["in transit", "delivered", "held"])))
 
     for d in docs:
-        _expand(rng, d)
+        # A policy and its own revision share one filler draw. A revision keeps
+        # the body of the document and changes specific clauses, so drawing
+        # independently made v1 and v2 as unlike each other as two unrelated
+        # topics -- their Jaccard fell to 0.37, under gate 25's floor, and the
+        # superseded phenomenon stopped being about supersession at all.
+        if d["type"] == "policy":
+            _expand(random.Random(f"{SEED}-{d['facts']['topic']}"), d)
+        else:
+            _expand(rng, d)
     for i, d in enumerate(docs):
         d["doc_index"] = i
 
@@ -555,16 +866,10 @@ def build_queries(rng: random.Random, docs: list[dict], by_id: dict[str, dict],
 
     # (a) Vocabulary mismatch: customer wording, operational answer. Three
     #     phrasings per topic, none of which shares the policy's own terms.
-    faq_phrasings = [
-        "how long do you keep my parcel when there is an address check on it",
-        "can I get my money back if a hold-up made my parcel late",
-        "what happens to my parcel if you cannot confirm where it is going",
-    ]
-    for key, title in POLICY_TOPICS:
+    for key, _title in POLICY_TOPICS:
         policy = current_policy(key)
-        for phrasing in faq_phrasings:
-            add(f"{phrasing} for {title.lower()}", [policy["doc_id"]],
-                "vocabulary_mismatch",
+        for phrasing in POLICY_RULES[key]["questions"]:
+            add(phrasing, [policy["doc_id"]], "vocabulary_mismatch",
                 "query is in the customer register; the gold document is in the "
                 "operational register and shares almost no vocabulary with it")
 
