@@ -1,0 +1,133 @@
+id: ret-l1-abtt
+title: "Centre, project, renormalise"
+lesson: modules/03-retrieval/01-embedding-geometry
+description: |
+  Implement the transform from §E and measure what it buys.
+
+  `DOCS` holds six unit vectors with a shared component deliberately planted in
+  them, which is what a real embedding model produces. `QUERY` is a query
+  vector whose correct answer is document 2. `MU` is the mean of the six
+  documents and `U1` is the leading principal direction of the centred set —
+  both computed for you, since deriving them is an SVD and applying them is
+  where the mistakes live.
+
+  Run the starter first. Every document scores above 0.86 against the query and
+  the top three are 0.990, 0.991 and 1.000, which is the cone: the right answer
+  wins by nine thousandths and any noise at all would reorder them.
+
+  Three steps, in this order:
+
+  1. subtract `MU`
+  2. subtract the projection onto `U1`, which is `(v · U1) * U1`
+  3. **renormalise to unit length**
+
+  Step 3 is the one the starter omits, and omitting it is silent. Projecting
+  out a direction shortens each vector by a different amount depending on how
+  much of that direction it carried, so the dot products afterwards are not
+  cosines and quietly favour whichever documents were furthest from `U1`.
+
+setup_code: |
+  # Six unit vectors with a shared component planted in them.
+  DOCS = [
+      [0.7781, 0.4955, 0.3860, -0.0036],
+      [0.8489, 0.0609, 0.5185, 0.0824],
+      [0.9147, 0.0159, 0.3964, 0.0769],
+      [0.9514, 0.1940, 0.0317, 0.2370],
+      [0.9389, 0.1805, 0.1154, 0.2693],
+      [0.9315, -0.0091, 0.3606, -0.0463],
+  ]
+  QUERY = [0.9093, -0.0069, 0.4093, 0.0745]
+  GOLD = 2
+
+  MU = [0.8939, 0.1563, 0.3014, 0.1026]
+  U1 = [0.1409, 0.2809, -0.8185, 0.4810]
+
+  def dot(a, b):
+      """Dot product of two equal-length vectors."""
+      return sum(x * y for x, y in zip(a, b))
+
+  def norm(v):
+      """Euclidean length of a vector."""
+      return dot(v, v) ** 0.5
+
+  def margin(query_vec, doc_vecs):
+      """Gap between the best and second-best document score.
+
+      The number that decides whether a ranking survives noise: a correct
+      answer that wins by 0.009 is one perturbation away from being wrong.
+      """
+      scores = sorted((dot(query_vec, d) for d in doc_vecs), reverse=True)
+      return scores[0] - scores[1]
+
+starter_code: |
+  def transform(v, mu, u1):
+      """Centre v, project out the u1 direction, and return a unit vector."""
+      centred = [x - m for x, m in zip(v, mu)]
+      weight = dot(centred, u1)
+      # Missing the third step. The vectors that come out of here have
+      # different lengths, so the dot products below are not cosines.
+      return [c - weight * u for c, u in zip(centred, u1)]
+
+
+  raw_scores = [dot(QUERY, d) for d in DOCS]
+  print("raw       ", [round(s, 3) for s in raw_scores])
+  print("raw margin", round(margin(QUERY, DOCS), 3))
+
+  tq = transform(QUERY, MU, U1)
+  td = [transform(d, MU, U1) for d in DOCS]
+  print("transformed", [round(dot(tq, d), 3) for d in td])
+  print("margin     ", round(margin(tq, td), 3))
+
+tests: |
+  tq = transform(QUERY, MU, U1)
+  td = [transform(d, MU, U1) for d in DOCS]
+
+  for i, v in enumerate(td):
+      assert abs(norm(v) - 1.0) < 1e-6, (
+          f"transformed document {i} has length {norm(v):.4f}, not 1.0. "
+          "Projecting out a direction shortens each vector by a different "
+          "amount, so the result has to be renormalised or the dot products "
+          "afterwards are not cosine similarities."
+      )
+  assert abs(norm(tq) - 1.0) < 1e-6, (
+      f"the transformed query has length {norm(tq):.4f}, not 1.0 — the query "
+      "needs exactly the same treatment as the documents"
+  )
+
+  # The transform must actually remove the shared direction.
+  # 1e-3 rather than something tighter because MU and U1 are given to four
+  # decimal places, so the projection cannot cancel more exactly than that.
+  for i, v in enumerate(td):
+      assert abs(dot(v, U1)) < 1e-3, (
+          f"transformed document {i} still has a component of {dot(v, U1):.5f} "
+          "along U1; that direction was supposed to be projected out"
+      )
+
+  scores = [dot(tq, d) for d in td]
+  assert max(range(len(scores)), key=lambda i: scores[i]) == GOLD, (
+      f"document {GOLD} is the correct answer but scored "
+      f"{scores[GOLD]:.3f} against a best of {max(scores):.3f}"
+  )
+
+  before = margin(QUERY, DOCS)
+  after = margin(tq, td)
+  assert before < 0.02, f"sanity: the raw margin should be tiny, got {before:.3f}"
+  assert after > 0.10, (
+      f"the margin after the transform is {after:.3f}, up from {before:.3f} — "
+      "expected above 0.10. If it is close to the raw margin, check that MU is "
+      "subtracted before the projection rather than after."
+  )
+
+hints:
+  - "Three steps and the starter does two. Compare the length of what you return against 1.0."
+  - "`weight * u for u in u1` removes the component; then divide every element by the length of the result."
+  - "The query is not special. Whatever you do to a document, do to it."
+
+solution: |
+  def transform(v, mu, u1):
+      """Centre v, project out the u1 direction, and return a unit vector."""
+      centred = [x - m for x, m in zip(v, mu)]
+      weight = dot(centred, u1)
+      stripped = [c - weight * u for c, u in zip(centred, u1)]
+      length = norm(stripped)
+      return [x / length for x in stripped]

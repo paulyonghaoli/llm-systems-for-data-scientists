@@ -93,3 +93,6 @@ nav:
       - "2.4 Structured output: schema, validation, repair": modules/02-prompting/04-structured-output.md
       - "2.5 Constrained decoding: the logit mask": modules/02-prompting/05-constrained-decoding.md
       - "Mini-project 2: the extraction harness": modules/02-prompting/project-extraction.md
+  - "Module 3 · Embeddings, retrieval & RAG":
+      - Overview: modules/03-retrieval/index.md
+      - "3.1 Embedding geometry": modules/03-retrieval/01-embedding-geometry.md

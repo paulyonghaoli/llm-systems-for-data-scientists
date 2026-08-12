@@ -1,0 +1,286 @@
+id: ret-l1
+lesson: modules/03-retrieval/01-embedding-geometry
+title: "3.1 - Embedding geometry"
+questions:
+  - id: q1
+    type: single
+    difficulty: easy
+    prompt: >-
+      Two documents chosen at random from this corpus have an average cosine
+      similarity of 0.841. What does that tell you about a retrieval filter
+      written as `if score > 0.8`?
+    options:
+      - text: "It admits essentially the whole corpus, so it filters nothing."
+        correct: true
+        explanation: >-
+          The background level is 0.84, so a 0.8 cutoff sits below it. The
+          filter looks principled, passes review, and does nothing — which is
+          worse than no filter, because it creates the belief that filtering is
+          happening.
+      - text: "It keeps only closely related documents, as intended."
+        explanation: >-
+          That would be true in a space where unrelated things score near
+          zero. This model's outputs occupy a narrow cone, so 0.8 is below
+          average rather than exceptional.
+      - text: "It is fine for documents but too strict for queries."
+        explanation: >-
+          The direction is right and the conclusion is not. It is too *loose*
+          for documents, and separately too strict for queries — the constant
+          is wrong in both regimes at once, which is why no single constant
+          works.
+      - text: "Nothing, because cosine similarity is not comparable across corpora."
+        explanation: >-
+          Comparability across corpora is a real concern, but here we measured
+          this corpus and this model directly, so the conclusion is available.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      A query scores 0.731 against the document that answers it, and 0.659
+      against a randomly chosen document. Two unrelated documents score 0.841
+      against each other. What follows?
+    options:
+      - text: "Similarity scores are not comparable between query-document and document-document pairs."
+        correct: true
+        explanation: >-
+          Short text and long text sit in different parts of the cone, so a
+          threshold calibrated on one is wrong for the other. A correct
+          query-document match scoring lower than two unrelated documents is
+          not a contradiction, it is a sign the two numbers are on different
+          scales.
+      - text: "The retrieval system is broken, since a correct match should outscore an unrelated pair."
+        explanation: >-
+          It is a natural expectation and it does not hold. Nothing requires
+          scores from different kinds of comparison to be on a shared scale.
+      - text: "The embedding model is undertrained."
+        explanation: >-
+          This pattern appears in well-trained models too; it is a property of
+          how pooled representations distribute, not of training quality.
+      - text: "The query should be embedded with a different model from the documents."
+        explanation: >-
+          That would guarantee failure. Both sides must come from the same
+          model or the vectors do not share a space at all.
+
+  - id: q3
+    type: single
+    difficulty: medium
+    prompt: >-
+      Half the variance across these 384-dimensional vectors lies in just three
+      directions, and the largest single component holds 29.4% on its own. What
+      is the practical implication?
+    options:
+      - text: "Most of the nominal dimensionality carries little information, and the dominant direction is largely shared rather than discriminative."
+        correct: true
+        explanation: >-
+          That shared direction is what centring and projection remove. It is
+          also why 384 dimensions does not buy 384 dimensions worth of
+          discrimination.
+      - text: "The vectors should be truncated to three dimensions before indexing."
+        correct: false
+        explanation: >-
+          Variance is not the same as usefulness. The discriminating signal
+          lives in the low-variance directions here — that is precisely why
+          removing the *highest*-variance direction helps.
+      - text: "The model was trained with too small an embedding size."
+        explanation: >-
+          The concentration is a property of frequency-weighted training
+          objectives and appears at every model size.
+      - text: "Cosine similarity is the wrong metric for these vectors."
+        explanation: >-
+          Cosine is fine once the shared offset is removed. The metric is not
+          the problem; the position of the cloud relative to the origin is.
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      Centring the vectors improved recall@10 from 0.489 to 0.534, with 15
+      queries improving and 7 getting worse, at p = 0.1338. What is the correct
+      conclusion?
+    options:
+      - text: "The evidence does not support adopting centring on its own; the split is consistent with chance."
+        correct: true
+        explanation: >-
+          A 4.5-point gain reported as an aggregate would be adopted without
+          question. The paired test says 15 against 7 is an unremarkable split
+          on 176 queries. Centring earns its place only in combination with
+          removing the first component, which is separately significant.
+      - text: "Centring improves recall by 4.5 points and should be adopted."
+        explanation: >-
+          This is the conclusion the aggregate invites and the paired test
+          rejects. The whole reason for running a paired test is that
+          aggregates on small query sets cannot distinguish this from noise.
+      - text: "Centring makes things worse, since 7 queries regressed."
+        explanation: >-
+          Some queries regressing is expected under any change. The question is
+          whether the imbalance between 15 and 7 is larger than chance
+          produces, and it is not.
+      - text: "The test is inappropriate because the same queries were used for both configurations."
+        explanation: >-
+          Using the same queries is exactly what makes the paired test valid
+          and more powerful. Pairing is information, and discarding it would
+          waste most of the available statistical power.
+
+  - id: q5
+    type: single
+    difficulty: hard
+    prompt: >-
+      Removing the first principal component lifted recall to 0.614 (14 queries
+      won, 0 lost). Removing a second dropped it to 0.540 (5 won, 18 lost,
+      p = 0.0106). What does this pattern mean?
+    options:
+      - text: "The first direction is shared offset; the second already carries discriminating signal."
+        correct: true
+        explanation: >-
+          The optimum is sharp and it is at one. Reading "remove the dominant
+          components" as licence to remove several destroys signal, and the
+          loss is statistically significant rather than incidental.
+      - text: "More components should be removed until recall stops improving."
+        explanation: >-
+          Recall stopped improving at one and then fell. A search over this
+          parameter is reasonable; assuming monotonicity is not.
+      - text: "The second measurement is noise and should be ignored."
+        explanation: >-
+          At p = 0.0106 with 18 queries lost against 5 won, this is the
+          opposite of noise — it is one of the stronger effects in the table.
+      - text: "The corpus is too small for principal component analysis to be stable."
+        explanation: >-
+          2,419 documents in 384 dimensions is ample. The non-monotonicity is a
+          real property of what the components contain, not an artefact of
+          sample size.
+
+  - id: q6
+    type: multi
+    difficulty: medium
+    prompt: >-
+      You have fitted the mean and first component on your document corpus.
+      Which of these will silently degrade retrieval quality without raising an
+      error?
+    options:
+      - text: "Applying the transform to documents but not to queries."
+        correct: true
+        explanation: >-
+          Every operation still succeeds and every score is still a plausible
+          number. A transform applied to one side of a comparison is not a
+          transform, it is a bug, and only a recall assertion catches it.
+      - text: "Skipping the renormalisation after projecting out the component."
+        correct: true
+        explanation: >-
+          Projection shortens each vector by a different amount, so the
+          resulting dot products are not cosines and quietly favour whichever
+          documents lay furthest from the removed direction.
+      - text: "Fitting the mean on a non-representative sample of the corpus."
+        correct: true
+        explanation: >-
+          The recentring then pushes the under-represented document types
+          around relative to everything else, harming exactly the documents
+          that were already least well served.
+      - text: "Storing the vectors int8-quantised with per-vector scales."
+        explanation: >-
+          Measured cosine fidelity is 0.99984 against float32, which costs
+          nothing detectable in retrieval quality while cutting storage
+          fourfold. This one is safe.
+      - text: "Pinning the embedding model to an explicit commit rather than a tag."
+        explanation: >-
+          That is the practice that *prevents* a silent failure, since a moved
+          tag would leave old vectors and new queries in different spaces with
+          nothing to indicate it.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why must the mean be subtracted *before* computing the principal
+      components rather than after?
+    options:
+      - text: "The leading component of an uncentred matrix is essentially the mean direction, so you would remove the same thing twice."
+        correct: true
+        explanation: >-
+          And the second pass would then take a genuine axis of variation with
+          it — which the experiment shows is actively harmful. Centring first
+          is what makes the component decomposition describe variation rather
+          than position.
+      - text: "It makes the singular value decomposition faster."
+        explanation: >-
+          Runtime is essentially unchanged. The reason is correctness of what
+          the components represent.
+      - text: "Uncentred matrices cannot be decomposed."
+        explanation: >-
+          They can. The decomposition is perfectly well defined; it just
+          answers a different question from the one you want.
+      - text: "It keeps the vectors on the unit sphere."
+        explanation: >-
+          Centring takes vectors *off* the unit sphere, which is why the
+          procedure ends with an explicit renormalisation.
+
+  - id: q8
+    type: numeric
+    difficulty: easy
+    prompt: >-
+      A query's correct document scores 0.637, and 16 of the 40 background
+      query-document similarities fall below that value. At what percentile of
+      the background does the correct answer sit? Answer as a number.
+    answer: 40
+    tolerance: 0.5
+    explanation: >-
+      16 of 40 is the 40th percentile — the correct answer for that query is
+      *less* similar to it than a median pairing of unrelated text. The raw
+      score of 0.637 concealed this completely, which is the argument for
+      calibrating against a background rather than reading absolute values.
+
+  - id: q9
+    type: single
+    difficulty: hard
+    prompt: >-
+      Your index is built and serving. You discover a better value for the
+      number of components to remove. What does changing it cost?
+    options:
+      - text: "A full re-embedding pass is not needed, but the index must be rebuilt from the re-transformed vectors."
+        correct: true
+        explanation: >-
+          The model output does not change, so nothing needs re-encoding; the
+          stored coordinates do change, and approximate index structures were
+          built from the old ones. This is the operational reason suboptimal
+          transforms survive in production for years.
+      - text: "Nothing — it is a query-time parameter."
+        explanation: >-
+          It is applied to both sides. Changing it for queries alone gives you
+          the one-sided-transform bug.
+      - text: "Every document must be re-embedded with the model."
+        explanation: >-
+          The transform is arithmetic applied after the model runs, so the
+          expensive step is not repeated.
+      - text: "Only the stored mean needs updating."
+        explanation: >-
+          The mean and the components are both parameters of the transform,
+          and the transformed vectors themselves are what the index holds.
+
+  - id: q10
+    type: single
+    difficulty: medium
+    prompt: >-
+      A comparison of two pooling strategies gave a decisive result — one won
+      10 queries to 0, at p = 0.0020 — but the benchmark it ran on turned out
+      to contain a defect. What is the right response?
+    options:
+      - text: "Discard the result and re-run it on the corrected benchmark, because significance measured on a broken benchmark measures the breakage."
+        correct: true
+        explanation: >-
+          This happened while building this lesson's fixture. On the corrected
+          corpus the same comparison was 12 to 5 at p = 0.1435, and the model
+          card's own choice stood. A p-value quantifies sampling noise, and has
+          nothing to say about whether the thing being measured is the thing
+          you meant to measure.
+      - text: "Keep it — p = 0.0020 is strong evidence regardless of the corpus."
+        explanation: >-
+          Statistical significance is conditional on the measurement being
+          valid. A confident answer to the wrong question stays wrong.
+      - text: "Keep it but lower the confidence claim to p < 0.05."
+        explanation: >-
+          Adjusting the reported threshold does not address the problem, which
+          is that the benchmark did not measure what it claimed to.
+      - text: "Average the two results."
+        explanation: >-
+          One of the two is known to be invalid. Averaging a valid measurement
+          with an invalid one produces a third invalid measurement.
