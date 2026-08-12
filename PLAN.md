@@ -11,9 +11,14 @@ the 2,500 floor, mean sentence length 25.7 words, 11.8% short sentences, up
 from 1,574 / 20.3 / 20.5% before the pass.
 
 Fifteen lessons, 32 exercises, 15 question banks (122 questions), 3 autograded
-mini-projects, 14 experiments, 8 generated figures, 24 gates green and
-browser-verified. See §11–14 for the build logs. Next: Module 3, on the corpus
-decided in §10a.
+mini-projects, 14 experiments, 8 generated figures, 26 gates green and
+browser-verified. See §11–15 for the build logs.
+
+**The Module 3 retrieval corpus is built and measured** — 2,419 documents,
+200 queries, all seven planted phenomena verified rather than asserted (gate
+25), with that verification itself adversarially tested (gate 26). See §15 and
+`data/corpus/README.md`. Next: `tools/record_embeddings.py`, then the Module 3
+lessons.
 
 **Audience.** Data scientists who are fluent in Python, pandas, NumPy, sklearn,
 statistics, experiment design and offline evaluation — and who have never
@@ -352,6 +357,8 @@ CI was red. `tools/check_one.py <exercise-id>` is the way to iterate on one item
 | 22 | **Figures match their code** — every committed SVG is byte-identical to a fresh render by `tools/figures.py` | a figure that has drifted from the experiment it illustrates — the pictorial version of the stale number gate 18 catches |
 | 23 | **The starter's first failure carries a message** — the first assertion a failing starter trips must explain itself | `an assertion failed`, which is the only thing a learner sees when the teaching surface of the exercise is a bare `assert` |
 | 24 | **Every exercise field compiles** — setup, starter, solution and tests must all parse | a `SyntaxError` in author-written scaffolding, which shows the learner an error in code they did not write about something the exercise is not teaching |
+| 25 | **Corpus phenomena are measured** — each of the seven planted phenomena is checked by a property it implies, using an untuned BM25 | a corpus that is *labelled* with a phenomenon it does not contain, which would make every retrieval result in Modules 3–4 a measurement of nothing |
+| 26 | **Gate 25 can fail** — nine mutations each destroy one phenomenon, and gate 25 must catch every one | a check that has only ever passed, which is indistinguishable from a check that cannot fail |
 
 Gates 12–18 are specific to this subject; 1–11, 19–20 and 22 are inherited; 21 and 23 are ours from the sibling robotics curriculum.
 
@@ -487,6 +494,42 @@ can see whether our effect sizes are in a plausible range.
 
 This is the same discipline as lesson 1.2's synthetic logit distribution: the
 generative choice *is* the claim, so it is stated rather than buried.
+
+### Amendment — documents, not chunks, and 2,419 rather than 6,000 (2026-08-12)
+
+The corpus as built departs from the shape above in two ways, both deliberate.
+
+**Documents, not chunks.** The section above sizes the corpus in *chunks* and
+promises gold *spans*. Shipping pre-chunked text would have left Module 3's
+chunking lesson with nothing to chunk — the learner would be handed the output
+of the decision the lesson is about. The corpus is therefore documents, gold
+labels are at document granularity as is standard in IR, and chunking is the
+learner's problem where it belongs.
+
+**2,419 documents, ~0.89 M tokens.** Against "6,000–9,000 chunks of ~400
+tokens" this is roughly a third of the planned volume. Nothing was cut to save
+effort: the sizing rule in the section above is *"sized by what the phenomena
+need, not by the budget"*, and gate 25 now measures what the phenomena need
+directly. All seven clear their thresholds at this size — BM25 misses the gold
+document for 100% of vocabulary-mismatch queries and is actively fooled on 74%
+of distractor queries. Adding filler documents would raise the token count
+without moving any of those numbers. The honest version of the original figure
+was "large enough that retrieval is not trivial", and that is now a measurement
+rather than an estimate.
+
+Length distribution matters more than total volume, and two versions got it
+wrong before this one: a fixed filler count made every document of a type
+almost exactly the same length (handbooks spanned 397–398 tokens), and fixing
+that with a single wide range for all types made policies and shipment records
+equally long, which no operational corpus looks like. The range is now per
+type — policies average 785 tokens, release notes 219, with a p10–p90 spread of
+roughly 2.5× inside each.
+
+**Where the honesty cost is actually paid.** The three mitigations above still
+hold, and `data/corpus/README.md` carries the blunt version: the prose is
+template-generated rather than hand-written, and a retriever that scores well
+here has been shown to handle seven specific planted difficulties and nothing
+else.
 
 ---
 
@@ -830,3 +873,77 @@ placeholder, and the reasoning is now §G's second self-check.
 
 *Amend this file when scope changes. It is the record of what was decided and
 why — including what was declined.*
+
+---
+
+## 15. Build log — the retrieval corpus (2026-08-12)
+
+Modules 3–4 and Capstone I all bind to this, so it was built before any of
+their lessons. Generator, verifier, and a test of the verifier:
+`tools/build_corpus.py`, `tools/verify_corpus.py` (gate 25),
+`tools/test_verify_corpus.py` (gate 26). Provenance in
+`data/corpus/README.md`.
+
+Final shape: 2,419 documents across seven types, 3.58 M chars (~0.89 M tokens),
+mean 370 tokens (median 373, sd 142), 365 documents over a 512-token window.
+200 queries spanning all seven phenomena. Rebuild is byte-identical from seed
+`20260811`, so the 4.2 MB file does not churn in git.
+
+### Three restructures, each from a measurement rather than a review
+
+**Chunks became documents.** The first version shipped pre-chunked text, which
+handed Module 3's chunking lesson the answer to its own question.
+
+**Filler pools were added.** Without them the corpus was four-sentence stubs,
+and a corpus of stubs makes retrieval unrealistically easy: every document is
+almost pure signal, so a query that matches anything matches the right thing.
+
+**Query selection was rewritten to a balanced round-robin.** Truncating a
+shuffled list to 200 dropped whole phenomena — the version before this one had
+176 queries with contradictions down to 12. The round-robin draws evenly and
+reaches 200 with no category below 24.
+
+### Gate 25 passed all nine checks on its first run, which is why gate 26 exists
+
+That is the least trustworthy moment for a check, not the most. Every
+silent-success bug available here looks exactly like a green tick: an empty
+candidate list, a `continue` that skips every item, a percentage over a zero
+denominator. So gate 26 destroys each phenomenon in turn — quoting the gold
+document verbatim into a "vocabulary mismatch" query, deleting the superseded
+versions, stripping digits from the contradicting FAQs — and requires gate 25
+to notice.
+
+It found a real gap immediately. A gold id naming a document that does not
+exist raised `KeyError` halfway through the checks rather than being reported,
+so `verify_corpus.py` now validates referential integrity before anything else.
+It also found a bug in *itself*: the first superseded mutation deleted every
+`-v1` document, but topics never revised are current at v1, so it orphaned live
+gold references and tripped the integrity check instead of the check it was
+aiming at. A mutation that fails for the wrong reason tests nothing.
+
+### Thresholds are set from meaning, not from measurement
+
+The temptation with a gate like 25 is to run it, see what the corpus produces,
+and write those numbers in as the thresholds. That produces a gate that records
+history and can never fail. Each threshold instead comes from what the
+phenomenon *means* — a vocabulary mismatch is a query BM25 should struggle
+with, so the threshold is "gold outside the top 5 for ≥50%", and the corpus
+measures 100%. When a check fails, the corpus gets fixed.
+
+The BM25 is written out in `verify_corpus.py` rather than imported, with
+untuned Robertson defaults, so the numbers depend on nothing outside this
+repository and "BM25 fails here" stays a statement about the corpus rather than
+about the tuning. Module 3 gets a reference implementation for free.
+
+### Carried forward
+
+`documents.jsonl` is 4.2 MB — fine in git and fine for graders that run
+locally, but a lot to pull into a browser tab for a Pyodide exercise. The
+likely resolution is a committed subset for in-page exercises with the full
+corpus reserved for the capstone, but the subset size should be chosen against
+a measured page load rather than guessed, so it is deferred to the lesson that
+first needs it.
+
+Still outstanding before Module 3's lessons: `tools/record_embeddings.py`, the
+hand-run recorder producing int8-quantised 384-dimension vectors under the same
+dated, version-pinned contract as the tiktoken fixture.

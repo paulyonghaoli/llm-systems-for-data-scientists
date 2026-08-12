@@ -45,6 +45,11 @@ GATES: list[tuple[str, list[str], Path]] = [
     ("18 computed numbers", [PY, "tools/gate_numbers.py"], ROOT),
     # 22 committed figures match a fresh render from the same code
     ("22 figures", [PY, "tools/figures.py", "--check"], ROOT),
+    # 25 the retrieval corpus contains the phenomena it claims to contain,
+    # and 26 checks that gate 25 can actually fail (it passed all nine of its
+    # own checks on the first run, which is when a check is least trustworthy)
+    ("25 corpus phenomena", [PY, "tools/verify_corpus.py"], ROOT),
+    ("26 corpus verifier", [PY, "tools/test_verify_corpus.py"], ROOT),
     # 07 nav coverage and orphans live here too
     ("19 audit", [PY, "tools/audit.py"], ROOT),
 ]
