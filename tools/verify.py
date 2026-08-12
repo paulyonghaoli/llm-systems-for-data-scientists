@@ -20,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PY = sys.executable
 TOK_MINI = ROOT / "projects" / "tokenizer_mini"
+EXTRACTION = ROOT / "projects" / "extraction_harness"
 REL_MINI = ROOT / "projects" / "reliability_report"
 
 GATES: list[tuple[str, list[str], Path]] = [
@@ -35,6 +36,9 @@ GATES: list[tuple[str, list[str], Path]] = [
     # 10 the thresholds hold across seeds, not just the one they were tuned on
     ("10 sweep:tokenizer_mini", [PY, "-m", "grader", "--sweep", "30"], TOK_MINI),
     ("10 sweep:reliability_report", [PY, "-m", "grader", "--sweep", "30"], REL_MINI),
+    ("08 grader:extraction_harness",
+     [PY, "-m", "grader", "--reference", "--seed", "1"], EXTRACTION),
+    ("10 sweep:extraction_harness", [PY, "-m", "grader", "--sweep", "30"], EXTRACTION),
     ("11 determinism", [PY, "tools/gate_determinism.py"], ROOT),
     ("12-17 subject gates", [PY, "tools/gates.py"], ROOT),
     ("13 no network", [PY, "tools/no_network.py"], ROOT),

@@ -336,10 +336,10 @@ nonsense.
 
 <quiz-bank src="prm-l5"></quiz-bank>
 
-This lesson closes Module 2's teaching content. The module's graded artifact —
-an extraction harness scored on schema conformance, repair rate and cost — is
-still to be built, and will put 2.4's repair ladder and this lesson's validator
-into one pipeline.
+This lesson closes Module 2. Its graded artifact,
+[**Mini-project 2 · the extraction harness**](project-extraction.md), puts
+2.4's repair ladder and this lesson's validator into one scored pipeline — and
+weights the two failures neither lesson could catch on its own.
 
 ## J · Annotated references
 

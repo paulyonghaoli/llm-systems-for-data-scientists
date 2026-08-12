@@ -20,18 +20,18 @@ cost, and no live API calls anywhere in the material.
 ## Status — P1 in progress, 2026-08-11
 
 P0 complete (platform + exemplar lesson). Course I under way: **Modules 0, 1
-and 2 all have their five lessons built.** Module 2's mini-project is the one
-outstanding piece before Module 3.
+and 2 are complete** — five lessons each, and a graded mini-project each.
+Module 3 is next, and is where the authored retrieval corpus gets built.
 
 | | |
 |---|---|
 | Lessons | 15 — Modules 0, 1 and 2, five lessons each |
 | In-browser exercises | 32 |
 | Quiz questions | 122 across 15 banks |
-| Autograded mini-projects | 2 |
+| Autograded mini-projects | 3 |
 | Experiments | 14, plus 8 generated figures and one hand-run fixture recorder |
 | Capstones | 0 (Capstone I closes P1) |
-| CI gates | 24, run as 14 commands |
+| CI gates | 24, run as 16 commands |
 
 Full scope is 4 courses, 16 modules, 87 lessons, 4 capstones — about 540
 learner-hours. Every phase is independently shippable; see PLAN.md §8.

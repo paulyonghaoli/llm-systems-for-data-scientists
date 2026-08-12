@@ -31,8 +31,10 @@ measurement you run against a real model on your own data.
 
 ## Graded artifact
 
-*Planned* — a structured-extraction harness scored on schema conformance,
-repair rate and cost.
+[Mini-project 2 · The extraction harness](project-extraction.md) — turn raw
+model output into validated records, and be honest about everything you could
+not. Scored on recovery, false accepts, truncation detection and cost
+discipline.
 
 ## What this module assumes
 
