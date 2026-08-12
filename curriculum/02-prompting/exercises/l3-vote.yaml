@@ -1,0 +1,112 @@
+id: prm-l3-vote
+title: "Majority vote, and when it backfires"
+lesson: modules/02-prompting/03-decomposition
+
+description: |
+  Two functions.
+
+  `majority_correct(p, k)` returns the exact probability that a majority of
+  `k` independent samples is correct, when each is correct with probability
+  `p`. It is a binomial tail, not a simulation:
+
+  ```
+  sum over i from (k // 2 + 1) to k of  C(k, i) * p**i * (1 - p)**(k - i)
+  ```
+
+  `voting_helps(p, k)` returns whether voting beats a single sample. The
+  answer is **not** always yes, and the tests care about the case where it is
+  not.
+
+setup_code: |
+  from math import comb
+
+  def approx(a, b, tol=1e-9):
+      """True when two probabilities agree to within tol."""
+      return abs(a - b) < tol
+
+starter_code: |
+  def majority_correct(p, k):
+      """Probability that a majority of k independent samples is correct."""
+      # More than half of k, so at least k // 2 of them.
+      need = k // 2
+      return sum(comb(k, i) * p**i * (1 - p) ** (k - i) for i in range(need, k + 1))
+
+
+  def voting_helps(p, k):
+      """True if voting over k samples beats a single sample."""
+      return k > 1
+
+
+  for p in (0.4, 0.7):
+      print(f"p={p}: k=1 {majority_correct(p, 1):.3f}  k=5 {majority_correct(p, 5):.3f}"
+            f"  helps={voting_helps(p, 5)}")
+
+tests: |
+  # k = 1 is just p, for any p. The starter fails here: k // 2 == 0, so it
+  # sums the whole distribution and always returns 1.
+  for p in (0.1, 0.4, 0.5, 0.7, 0.99):
+      assert approx(majority_correct(p, 1), p), (
+          f"majority_correct({p}, 1) should be exactly {p}, got "
+          f"{majority_correct(p, 1)}. A majority of one sample means that "
+          "sample is correct. Summing from k // 2 includes the i = 0 term, "
+          "which sums the entire distribution to 1."
+      )
+
+  # Hand-checkable: k = 3 has closed form 3p^2(1-p) + p^3.
+  for p in (0.3, 0.6, 0.85):
+      expected = 3 * p**2 * (1 - p) + p**3
+      assert approx(majority_correct(p, 3), expected), (
+          f"majority_correct({p}, 3) = {majority_correct(p, 3)}, expected {expected}"
+      )
+
+  # A fair coin stays a fair coin however many times you flip it.
+  for k in (1, 3, 5, 21):
+      assert approx(majority_correct(0.5, k), 0.5), (
+          f"at p=0.5 voting cannot help or hurt; k={k} gave "
+          f"{majority_correct(0.5, k)}"
+      )
+
+  # Above one half, more samples is monotonically better.
+  vals = [majority_correct(0.7, k) for k in (1, 3, 5, 11, 21)]
+  assert vals == sorted(vals), f"expected increasing accuracy above p=0.5, got {vals}"
+  assert vals[-1] > 0.97
+
+  # BELOW one half, more samples is monotonically WORSE. This is the half of
+  # Condorcet's theorem that gets left out.
+  vals = [majority_correct(0.4, k) for k in (1, 3, 5, 11, 21)]
+  assert vals == sorted(vals, reverse=True), (
+      f"at p=0.4 accuracy should fall as k rises, got {vals}. Voting amplifies "
+      "whatever the model already is, so below one half it converges towards "
+      "being reliably wrong."
+  )
+  assert vals[-1] < 0.2
+
+  # voting_helps has to encode that precondition rather than assume k > 1.
+  assert voting_helps(0.7, 5) is True
+  assert voting_helps(0.4, 5) is False, (
+      "voting_helps(0.4, 5) returned True. At 40% per-sample accuracy a "
+      "five-sample vote scores 31.7%, which is worse than asking once — so "
+      "the honest answer is False."
+  )
+  assert voting_helps(0.4, 21) is False
+  assert voting_helps(0.7, 1) is False, "one sample is not a vote"
+  assert voting_helps(0.5, 5) is False, "at exactly one half it changes nothing"
+
+hints:
+  - "`more than half of k` means at least `k // 2 + 1`, not `k // 2`. Check your answer against k = 1."
+  - "`voting_helps` should compare `majority_correct(p, k)` against `p` rather than looking at k alone."
+  - "Use a strict comparison so that p = 0.5, where voting changes nothing, returns False."
+
+solution: |
+  def majority_correct(p, k):
+      need = k // 2 + 1
+      return sum(comb(k, i) * p**i * (1 - p) ** (k - i) for i in range(need, k + 1))
+
+
+  def voting_helps(p, k):
+      return majority_correct(p, k) > p
+
+
+  for p in (0.4, 0.7):
+      print(f"p={p}: k=1 {majority_correct(p, 1):.3f}  k=5 {majority_correct(p, 5):.3f}"
+            f"  helps={voting_helps(p, 5)}")

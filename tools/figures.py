@@ -301,9 +301,40 @@ def fig_fewshot_selection(outdir: Path) -> None:
         _save(fig, "fewshot-selection", variant, outdir)
 
 
+def fig_self_consistency(outdir: Path) -> None:
+    """Majority-vote accuracy against k, for several per-sample accuracies.
+
+    The 50% line is the point of the figure: above it the curves climb, below
+    it they fall, and the curve that starts below never recovers however many
+    samples you buy.
+    """
+    from experiments.self_consistency import majority_correct
+
+    ks = [1, 3, 5, 7, 9, 11, 15, 21, 31]
+    ps = [(0.40, "40% per sample"), (0.55, "55%"), (0.70, "70%"), (0.85, "85%")]
+
+    for variant, theme in THEMES.items():
+        fig, ax = plt.subplots(figsize=(6.4, 4.0))
+        _style(ax, theme)
+        colours = [theme["unpaired"], theme["fg"], theme["accent"], theme["paired"]]
+        for (p, label), colour in zip(ps, colours, strict=True):
+            ys = [100 * majority_correct(p, k) for k in ks]
+            ax.plot(ks, ys, "o-", color=colour, linewidth=2, markersize=4, label=label)
+        ax.axhline(50, color=theme["fg"], linewidth=1, linestyle=":", alpha=0.7)
+        ax.annotate("50%: below this line, voting makes it worse",
+                    (2, 52), color=theme["fg"], fontsize=8)
+        ax.set_xlabel("samples voted over (k)")
+        ax.set_ylabel("accuracy of the majority answer (%)")
+        ax.set_title("Self-consistency amplifies whatever the model already was")
+        ax.set_ylim(0, 104)
+        ax.legend(loc="center right", fontsize=8, frameon=False, labelcolor=theme["fg"])
+        _save(fig, "self-consistency", variant, outdir)
+
+
 FIGURES = [
     fig_eval_power,
     fig_fewshot_selection,
+    fig_self_consistency,
     fig_aggregate_masking,
     fig_nucleus_temperature,
     fig_conversation_cost,

@@ -4,13 +4,13 @@
 sessions treat this file as authoritative and amend it when scope changes.
 
 **Where things stand:** **P0 complete**; **P1 (Course I) under way.**
-Modules 0 and 1 complete; Module 2 at 2.2 of 5. **The deepening backlog is
+Modules 0 and 1 complete; Module 2 at 2.3 of 5. **The deepening backlog is
 cleared (2026-08-11): every lesson meets gate 21**, at a median of 2,556
 words against the 2,500 floor, a mean sentence length of 25.7 words and 11.8%
-short sentences — up from 1,574 / 20.3 / 20.5% before the pass. Twelve lessons,
-26 exercises, 12 question banks (98 questions), 2 autograded mini-projects,
-11 experiments, 6 generated figures, 22 gates green and browser-verified. See
-§11–14 for the build logs. Next: lessons 2.3–2.5, then Module 3 on the corpus
+short sentences — up from 1,574 / 20.3 / 20.5% before the pass. Thirteen lessons,
+28 exercises, 13 question banks (106 questions), 2 autograded mini-projects,
+12 experiments, 7 generated figures, 23 gates green and browser-verified. See
+§11–14 for the build logs. Next: lessons 2.4–2.5, then Module 3 on the corpus
 decided in §10a.
 
 **Audience.** Data scientists who are fluent in Python, pandas, NumPy, sklearn,
@@ -348,8 +348,9 @@ CI was red. `tools/check_one.py <exercise-id>` is the way to iterate on one item
 | 20 | **Provided-object contracts** — every non-constant object `setup_code` hands the learner carries a docstring or a `provided:` summary | a name and a signature that say nothing about what the arguments mean, in code the learner cannot open |
 | 21 | **Lesson depth and prose style** — ≥2,500 words, mean sentence ≥22, ≤18% of sentences under 11 words | a "textbook-scale" claim that the text does not support, and notes-style prose that reads as an essay rather than a chapter |
 | 22 | **Figures match their code** — every committed SVG is byte-identical to a fresh render by `tools/figures.py` | a figure that has drifted from the experiment it illustrates — the pictorial version of the stale number gate 18 catches |
+| 23 | **The starter's first failure carries a message** — the first assertion a failing starter trips must explain itself | `an assertion failed`, which is the only thing a learner sees when the teaching surface of the exercise is a bare `assert` |
 
-Gates 12–18 are specific to this subject; 1–11 and 19–22 are inherited from the sibling robotics curriculum.
+Gates 12–18 are specific to this subject; 1–11, 19–20 and 22 are inherited; 21 and 23 are ours from the sibling robotics curriculum.
 
 ---
 

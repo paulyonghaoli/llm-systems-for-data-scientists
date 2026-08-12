@@ -309,6 +309,31 @@ def run_exercise_solution(spec: dict) -> str | None:
     return None
 
 
+def starter_first_failure(spec: dict) -> str | None:
+    """The message a learner sees when they first run the starter.
+
+    Returns the AssertionError's message, "" if it carried none, or None if
+    the starter did not fail with an assertion at all (it may raise something
+    else, which is a legitimate way for a starter to fail).
+
+    Gate 23 uses this. Not every assertion needs a message — many are
+    secondary checks that only fire once a messaged one has already explained
+    the idea — but the *first* one a failing starter hits is the entire
+    teaching surface of the exercise, and a bare `assert` there shows the
+    learner "an assertion failed" and nothing else.
+    """
+    ns: dict = {}
+    try:
+        _exec(spec.get("setup_code", ""), ns)
+        _exec(spec["starter_code"], ns)
+        _exec(spec["tests"], ns)
+    except AssertionError as e:
+        return str(e)
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
 def run_exercise_starter(spec: dict) -> str | None:
     """Return None if the starter FAILS its tests (correct), else a message.
 

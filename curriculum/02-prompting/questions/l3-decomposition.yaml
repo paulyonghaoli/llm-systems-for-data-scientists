@@ -1,0 +1,190 @@
+id: prm-l3
+lesson: modules/02-prompting/03-decomposition
+title: "2.3 - Decomposition and self-consistency"
+questions:
+  - id: q1
+    type: numeric
+    difficulty: medium
+    answer: 17.4
+    tolerance: 1.5
+    prompt: >-
+      A task the model gets right 40% of the time. You sample 21 answers and
+      take the majority. What accuracy do you get? (One decimal place.)
+    explanation: >-
+      17.4% — worse than the 40% you started with, by 22.6 points, at
+      twenty-one times the cost. Voting amplifies whatever the model already
+      is, so below one half it converges towards being reliably wrong. This is
+      the half of Condorcet's jury theorem that gets left out.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: "What is the precondition for self-consistency to help at all?"
+    options:
+      - text: "Per-sample accuracy above 50%."
+        correct: true
+        explanation: >-
+          Above one half the majority converges towards correct; below it,
+          towards reliably wrong; at exactly one half it does nothing. This is
+          measurable before you build anything.
+      - text: "At least five samples."
+        explanation: >-
+          The number of samples controls how fast it converges, not which
+          direction it converges in.
+      - text: "A temperature above zero."
+        explanation: >-
+          Necessary for the samples to differ at all, and nowhere near
+          sufficient — sampling a task the model is bad at just gives you
+          varied wrong answers.
+      - text: "A task with a single correct answer."
+        explanation: >-
+          Needed for votes to be comparable, which is a separate practical
+          requirement from the accuracy precondition.
+
+  - id: q3
+    type: numeric
+    difficulty: hard
+    answer: 88.8
+    tolerance: 1.5
+    prompt: >-
+      You want to replace one step that is 70% accurate with a chain of three
+      steps. What accuracy must each new step reach just to break even? (One
+      decimal place, as a percentage.)
+    explanation: >-
+      88.8%, which is 0.70 to the power of one third. Accuracies multiply
+      along a chain, so the break-even is the nth root — and the nth root of a
+      number below one is much closer to one than the number itself. Splitting
+      three ways therefore demands nearly nineteen extra points per step
+      before it gains anything.
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      Three steps at 90% accuracy each. How does the chain compare with a
+      single step at 75%?
+    options:
+      - text: "Worse — the chain gives 72.9% end to end."
+        correct: true
+        explanation: >-
+          0.9 cubed is 0.729. Steps that each sound excellent compose into
+          something mediocre, which is why the burden of proof sits on the
+          decomposition rather than on the status quo.
+      - text: "Better, since every step is above 75%."
+        explanation: >-
+          Step accuracies multiply rather than averaging, so per-step
+          comparisons say nothing about the end-to-end result.
+      - text: "About the same."
+        explanation: >-
+          72.9% against 75% is a real loss, and it widens quickly with chain
+          length.
+      - text: "It depends on the order of the steps."
+        explanation: >-
+          Multiplication is commutative, so ordering does not change the
+          product.
+
+  - id: q5
+    type: single
+    difficulty: hard
+    prompt: >-
+      At 70% per-sample accuracy, k=1→5 gains 13.7 points and k=5→21 gains
+      13.7 points. What diminishes?
+    options:
+      - text: "The cost-effectiveness — extra samples per accuracy point rises from 0.24 to 1.93."
+        correct: true
+        explanation: >-
+          The raw accuracy gain does not taper across this range at all, and
+          in error terms the later samples do more work (30% → 16.3% → 2.6%).
+          What gets worse is the price of each point.
+      - text: "The accuracy gain, which halves each time."
+        explanation: >-
+          Measurably false here: both ranges gain the same 13.7 points.
+      - text: "The correlation between samples."
+        explanation: >-
+          Correlation is a property of the model and the prompt, unaffected by
+          how many samples you draw.
+      - text: "Nothing diminishes; more samples are always proportionally better."
+        explanation: >-
+          The marginal cost per point rises eightfold across the range
+          measured, which is the whole basis for choosing a finite k.
+
+  - id: q6
+    type: single
+    difficulty: hard
+    prompt: >-
+      Why does "samples per correct answer", computed as k divided by
+      accuracy, fail as a way to choose k?
+    options:
+      - text: "Cost rises linearly in k while accuracy is capped at 1, so it is minimised at k=1 for every p."
+        correct: true
+        explanation: >-
+          It can never recommend anything but a single sample, which makes it
+          a metric that looks reasonable and answers no question. The marginal
+          cost per accuracy point is the usable version.
+      - text: "It ignores the cost of the vote itself."
+        explanation: >-
+          Tallying votes is free relative to the sampling; that is not the
+          problem.
+      - text: "It requires knowing p, which is unmeasurable."
+        explanation: >-
+          p is measurable with lesson 0.3's machinery, and the marginal metric
+          needs it too.
+      - text: "It only works for odd k."
+        explanation: >-
+          Odd k avoids ties, which applies to every metric here equally.
+
+  - id: q7
+    type: multi
+    difficulty: medium
+    prompt: >-
+      Repeated samples from one model are correlated. Which consequences
+      follow?
+    options:
+      - text: "The benefit of voting is bounded, and at rho = 0.6 twenty-one samples buy about 11 points instead of 27."
+        correct: true
+        explanation: >-
+          The correlated fraction is where voting is powerless by
+          construction, while the cost stays exactly k times a single call.
+      - text: "Correlation should be measured before committing to a k."
+        correct: true
+        explanation: >-
+          It takes an afternoon: sample the same prompt k times over a few
+          dozen items and record how often all k agree.
+      - text: "A confidently wrong model votes for the same wrong answer every time."
+        correct: true
+        explanation: >-
+          Which is exactly why voting attacks variance and leaves bias
+          untouched — the same reason correlated base learners weaken a bagged
+          ensemble.
+      - text: "Raising the temperature removes the correlation."
+        explanation: >-
+          It scatters the samples at the margin and does not change the
+          model's systematic tendencies, which are the source of the
+          correlation.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      Self-consistency is described as a variance-reduction technique. What
+      does that framing predict?
+    options:
+      - text: "It cannot fix errors with a systematic cause, however many samples you buy."
+        correct: true
+        explanation: >-
+          Variance reduction leaves bias untouched. A model wrong for a
+          systematic reason produces correlated errors, and the vote
+          faithfully reproduces them — which is the same reason resampling
+          never fixed bias in a bagged ensemble either.
+      - text: "It works best on tasks with a single deterministic answer."
+        explanation: >-
+          Comparable answers are a practical requirement for voting, not a
+          consequence of the variance framing.
+      - text: "Accuracy improves without bound as k rises."
+        explanation: >-
+          It converges towards 1 only when p exceeds one half, and correlation
+          caps how close it gets.
+      - text: "It reduces cost by avoiding retries."
+        explanation: >-
+          It multiplies cost by k. Any saving has to come from what the
+          improved accuracy is worth downstream.

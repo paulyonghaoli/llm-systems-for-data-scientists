@@ -85,6 +85,13 @@ Every option in a multiple-choice question needs an `explanation`, including
 the correct one — a distractor without a reason is a missed lesson, and the
 schema check enforces it.
 
+**The starter's first failure is the exercise.** Whichever assertion a failing
+starter trips first is the only message most learners will read, so it has to
+say what went wrong and why — gate 23 rejects a bare `assert` in that position.
+Later assertions may be bare when a messaged one has already explained the
+idea; the gate deliberately checks the first failure rather than all of them,
+because requiring a message everywhere produces noise instead of teaching.
+
 Every exercise starter must **fail** its own tests. An exercise whose starter
 passes asks for nothing, is invisible to every other check in the toolchain,
 and eye review does not catch it. Gate 4.
@@ -176,7 +183,7 @@ Repository visibility is not scripted anywhere; that stays a manual decision.
 
 ## The gates
 
-Twenty-two, listed in `PLAN.md` §7 and run by `tools/verify.py`. Seven are
+Twenty-three, listed in `PLAN.md` §7 and run by `tools/verify.py`. Seven are
 specific to this subject: no prompt-graded-by-mock, no network at test time,
 fixture integrity, volatility containment, lesson freshness, Pyodide import
 allowlist, and computed-number verification.

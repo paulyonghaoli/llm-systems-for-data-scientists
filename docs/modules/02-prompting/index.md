@@ -25,7 +25,7 @@ measurement you run against a real model on your own data.
 
 1. [2.1 Instruction structure and the trust boundary](01-instruction-structure.md) — **available**
 2. [2.2 Few-shot selection is a retrieval problem](02-fewshot-selection.md) — **available**
-3. 2.3 Decomposition, chaining and self-consistency — *planned*
+3. [2.3 Decomposition, chaining and self-consistency](03-decomposition.md) — **available**
 4. 2.4 Structured output: schema, validation, repair — *planned*
 5. 2.5 Constrained decoding: the logit mask — *planned*
 

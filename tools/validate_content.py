@@ -15,6 +15,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+#: Gate 23. Shorter than this and the message is not saying anything.
+MIN_FIRST_FAILURE_CHARS = 25
+
 from tools.content_lib import (  # noqa: E402
     ContentError,
     build_provided,
@@ -22,6 +25,7 @@ from tools.content_lib import (  # noqa: E402
     load_all,
     run_exercise_solution,
     run_exercise_starter,
+    starter_first_failure,
 )
 
 
@@ -49,6 +53,16 @@ def main() -> int:
                     f"{item['signature']} is handed to the learner with no "
                     f"description: give it a docstring or a `provided:` summary"))
         failures.extend(ContentError(f"exercise {ex_id}", e) for e in perrs)
+
+        # Gate 23. The first assertion a failing starter trips is the message
+        # the learner actually reads, so it has to say something.
+        first = starter_first_failure(spec)
+        if first is not None and len(first.strip()) < MIN_FIRST_FAILURE_CHARS:
+            failures.append(ContentError(
+                f"exercise {ex_id}",
+                f"the starter's first failure shows {first.strip()!r} — a bare "
+                f"`assert` with no message. That line is the whole teaching "
+                f"surface of the exercise; say what went wrong and why"))
 
     n = export_json(cs)
     print(f"quiz banks: {len(cs.quizzes)}  exercises: {len(cs.exercises)}  json rewritten: {n}")
