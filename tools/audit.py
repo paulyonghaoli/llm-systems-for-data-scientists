@@ -58,6 +58,10 @@ SCHEMA_SECTIONS = [
 #: sentences reads as notes rather than as a textbook, and nothing else in the
 #: toolchain can see it.
 MIN_WORDS = 2500
+#: PLAN.md §4 declares a range, and a gate that enforces only its floor lets a
+#: lesson sprawl. Discovered when a stripper bug undercounted 2.4 by 1,666
+#: words and the padding added to "fix" it went unnoticed.
+MAX_WORDS = 4000
 MIN_MEAN_SENTENCE = 22
 MAX_SHORT_SENTENCE_PCT = 18
 SHORT_SENTENCE_WORDS = 10
@@ -72,7 +76,14 @@ DEEPENING_BACKLOG: set[str] = set()  # cleared 2026-08-11; every lesson meets ga
 def prose_of(md: str) -> str:
     """Lesson text with everything that is not prose removed."""
     md = re.sub(r"\A---\n.*?\n---\n", "", md, flags=re.S)  # front matter
-    md = re.sub(r"```.*?```", " ", md, flags=re.S)  # fenced code
+    # Fenced code, anchored to the start of a line. An unanchored `\x60{3}`
+    # also matches inline code spans — a table cell describing a ```json
+    # fence, for instance — and those stray markers mis-pair with the real
+    # fences, silently swallowing everything in between. That undercounted
+    # lesson 2.4 by several hundred words and is the same class of bug as the
+    # bare `<` below: a stripper that is too eager deletes the prose it was
+    # meant to measure.
+    md = re.sub(r"^[ \t]*```.*?^[ \t]*```", " ", md, flags=re.S | re.M)
     md = re.sub(r"<!--.*?-->", " ", md, flags=re.S)  # computed markers
     md = re.sub(r"^\|.*$", " ", md, flags=re.M)  # tables
     md = re.sub(r"\$\$.*?\$\$", " ", md, flags=re.S)  # display maths
@@ -166,6 +177,11 @@ def main() -> int:
                     f"{rel}: {words} words of prose; PLAN.md §4 declares 2,500-4,000. "
                     f"Add substance — definitions, worked arithmetic, an answered "
                     f"objection — rather than padding")
+            if words > MAX_WORDS:
+                problems.append(
+                    f"{rel}: {words} words of prose; PLAN.md §4 declares 2,500-4,000. "
+                    f"Cut, or split the lesson — a chapter nobody finishes teaches "
+                    f"nothing")
             if mean_len < MIN_MEAN_SENTENCE:
                 problems.append(
                     f"{rel}: mean sentence {mean_len:.1f} words (target 25-30, floor "

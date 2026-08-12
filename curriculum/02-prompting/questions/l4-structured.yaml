@@ -1,0 +1,197 @@
+id: prm-l4
+lesson: modules/02-prompting/04-structured-output
+title: "2.4 - Structured output"
+questions:
+  - id: q1
+    type: single
+    difficulty: easy
+    prompt: >-
+      Two free repair stages take the parse rate from 61.7% to 96.2%. What does
+      that imply about model-based repair?
+    options:
+      - text: "It has to justify its cost against the 3.8% residual, not against the 38.3% you started with."
+        correct: true
+        explanation: >-
+          A full extra call to recover 3.8% of requests is a very different
+          proposition from one that recovers a third, and the free rungs run
+          first precisely so the expensive one runs rarely.
+      - text: "It is never worth doing."
+        explanation: >-
+          It may well be, when the recovered requests are valuable enough. The
+          point is which number the comparison is made against.
+      - text: "It should run first, since it handles the most cases."
+        explanation: >-
+          It handles the fewest, and costs the most. Cheapest rung first is the
+          whole ordering principle.
+      - text: "Deterministic repairs make it unnecessary."
+        explanation: >-
+          They leave a residual that by construction contains the strangest
+          outputs; whether to pay for those is a real decision.
+
+  - id: q2
+    type: numeric
+    difficulty: medium
+    answer: 7.8
+    tolerance: 1
+    prompt: >-
+      In this lesson's experiment, what percentage of all outputs parse cleanly
+      as JSON and still fail the schema?
+    explanation: >-
+      7.8% — roughly one in thirteen. A required key missing, or a quantity
+      that arrived as "17" rather than 17. Every one of those passes a pipeline
+      whose only check is a successful json.loads, with no signal that anything
+      is wrong.
+
+  - id: q3
+    type: single
+    difficulty: hard
+    prompt: >-
+      Why is a `NaN` in a model's output described as worse than a parse
+      failure?
+    options:
+      - text: "Python's json.loads accepts it by default, producing a float that is not equal to itself and re-serialises to invalid JSON."
+        correct: true
+        explanation: >-
+          The failure propagates silently into whatever consumes it rather than
+          announcing itself at the boundary. `parse_constant` is the documented
+          opt-out, and without it 2.2% of the outputs measured slip through.
+      - text: "It is slower to parse."
+        explanation: >-
+          Parsing cost is irrelevant here; the problem is that it succeeds when
+          it should not.
+      - text: "It cannot be repaired mechanically."
+        explanation: >-
+          A NaN → null substitution is trivial. The difficulty is that the
+          repair never runs, because the document already parsed.
+      - text: "It always indicates the model was truncated."
+        explanation: >-
+          Truncation is a separate failure mode with its own signal.
+
+  - id: q4
+    type: single
+    difficulty: medium
+    prompt: >-
+      `isinstance(True, int)` is `True` in Python. What does that mean for a
+      hand-rolled validator?
+    options:
+      - text: "A boolean passes an integer type check, so `\"quantity\": true` validates."
+        correct: true
+        explanation: >-
+          bool is a subclass of int. The fix is to reject bools explicitly
+          before the ordinary type check, and it is exactly the kind of hole a
+          real schema library does not have.
+      - text: "Integers can be used where booleans are expected."
+        explanation: >-
+          True in the other direction and not the problem — nothing here checks
+          for a bool and receives an int.
+      - text: "Nothing, since models do not emit booleans for numeric fields."
+        explanation: >-
+          They do, particularly when a field name is ambiguous, which is
+          precisely when you need the validator.
+      - text: "Type checking is impossible in Python."
+        explanation: >-
+          It works fine; this is one documented subclassing relationship to
+          account for.
+
+  - id: q5
+    type: single
+    difficulty: hard
+    prompt: >-
+      Why must the single-quote repair be guarded by "only if the document
+      contains no double quotes"?
+    options:
+      - text: "Otherwise it destroys apostrophes inside legitimately double-quoted strings, corrupting valid input."
+        correct: true
+        explanation: >-
+          `"note": "customer's address"` becomes unparseable. A repair that can
+          damage well-formed input is worse than no repair, because it converts
+          a working case into a broken one while looking helpful.
+      - text: "Because single quotes are valid JSON in some dialects."
+        explanation: >-
+          They are not valid JSON in any dialect the standard recognises.
+      - text: "To make the repair faster."
+        explanation: >-
+          A string replace on documents of this size costs nothing measurable.
+      - text: "Because the model never emits both quote styles."
+        explanation: >-
+          It routinely emits double-quoted JSON containing apostrophes, which
+          is the case the guard protects.
+
+  - id: q6
+    type: multi
+    difficulty: medium
+    prompt: >-
+      Of the truncated outputs, 43.9% still parse and 9.8% also satisfy the
+      schema. Which conclusions follow?
+    options:
+      - text: "Truncation cannot be detected reliably by parsing or by schema validation."
+        correct: true
+        explanation: >-
+          Nearly a tenth of them pass every check in this lesson while being
+          incomplete records.
+      - text: "The finish reason is the only reliable signal."
+        correct: true
+        explanation: >-
+          Which is why lesson 1.4 keeps insisting on reading it, and why it is
+          worth a shared helper rather than a check at each call site.
+      - text: "Raising max_tokens addresses the cause rather than the symptom."
+        correct: true
+        explanation: >-
+          And it is free to evaluate: count how many responses have a non-stop
+          finish reason before writing any repair code.
+      - text: "A stricter schema would catch them."
+        explanation: >-
+          Only if the truncated keys happen to be required. The 9.8% measured
+          here satisfy the schema precisely because what was lost was optional.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: >-
+      What does `except json.JSONDecodeError: return None` make impossible to
+      observe?
+    options:
+      - text: "The failure rate, and therefore any change in it."
+        correct: true
+        explanation: >-
+          A swallowed exception turns a countable event into an absence, so a
+          provider update that doubles your malformation rate shows up as
+          slightly more missing data and nothing else. Catch it and increment
+          a counter.
+      - text: "The content of the malformed output."
+        explanation: >-
+          You could log that in either version; the systematic loss is the
+          rate.
+      - text: "Nothing — returning None is equivalent to raising."
+        explanation: >-
+          To the caller perhaps, and not to whoever needs to know how often it
+          happens.
+      - text: "The schema violations."
+        explanation: >-
+          Those parse successfully and never reach this exception handler at
+          all.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      In a conventional data pipeline, validation is a gate at ingest. Why is
+      that framing wrong here?
+    options:
+      - text: "The source is nondeterministic, so validity is a per-request property with a rate rather than a fact about the pipeline."
+        correct: true
+        explanation: >-
+          The same input can produce a valid output on Monday and an invalid
+          one on Tuesday, so the rate belongs in your metrics beside latency
+          and cost.
+      - text: "Because model output is always invalid."
+        explanation: >-
+          On the mix measured, most of it parses on the first attempt.
+      - text: "Because schemas cannot express model output."
+        explanation: >-
+          They express it perfectly well; the question is when and how often
+          you check.
+      - text: "Because validation belongs downstream instead."
+        explanation: >-
+          It belongs at the boundary as usual — and repeatedly, with the
+          results counted, rather than once.

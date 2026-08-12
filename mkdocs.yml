@@ -90,3 +90,4 @@ nav:
       - "2.1 Instruction structure and the trust boundary": modules/02-prompting/01-instruction-structure.md
       - "2.2 Few-shot selection is a retrieval problem": modules/02-prompting/02-fewshot-selection.md
       - "2.3 Decomposition, chaining and self-consistency": modules/02-prompting/03-decomposition.md
+      - "2.4 Structured output: schema, validation, repair": modules/02-prompting/04-structured-output.md

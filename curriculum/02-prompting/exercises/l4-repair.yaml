@@ -1,0 +1,148 @@
+id: prm-l4-repair
+title: "The repair ladder, cheapest rung first"
+lesson: modules/02-prompting/04-structured-output
+description: |
+  Recover a JSON object from what a model actually returns, using only free
+  deterministic repairs.
+
+  Implement two functions, applied in this order:
+
+  1. `extract(text)` — strip a ```` ```json ```` fence and any conversational
+     padding, leaving the substring from the first `{` to the last `}`.
+  2. `mechanical(text)` — fix trailing commas, `NaN` and `Infinity` literals,
+     unquoted keys, and documents that are single-quoted throughout.
+
+  Then `repair(text)` runs the ladder: parse as-is, then after extraction,
+  then after mechanical fixes, returning the first parse that succeeds or
+  `None`.
+
+  **The single-quote fix needs a guard.** Replacing every `'` with `"`
+  unconditionally destroys apostrophes inside valid strings, turning
+  `"note": "customer's address"` into something that no longer parses. Only
+  apply it when the document contains no double quotes at all.
+
+setup_code: |
+  import json
+  import re
+
+  CASES = {
+      "clean":          '{"id": "a1", "qty": 3}',
+      "fenced":         '```json\n{"id": "a1", "qty": 3}\n```',
+      "preamble":       'Here is the JSON you requested:\n\n{"id": "a1", "qty": 3}',
+      "trailing_comma": '{"id": "a1", "qty": 3,}',
+      "single_quotes":  "{'id': 'a1', 'qty': 3}",
+      "unquoted_keys":  '{id: "a1", qty: 3}',
+      "nan_literal":    '{"id": "a1", "qty": NaN}',
+      "apostrophe":     '{"id": "a1", "note": "customer\'s address"}',
+      "hopeless":       'I am afraid I cannot help with that request.',
+  }
+
+  def _reject(name):
+      raise ValueError(f"{name} is not valid JSON")
+
+  def parse(text):
+      """json.loads, returning None instead of raising.
+
+      Uses parse_constant to REJECT NaN and Infinity. Python's json accepts
+      both by default even though neither is valid JSON, which would let this
+      exercise's nan_literal case parse at the first rung and hand you a float
+      that is not equal to itself.
+      """
+      try:
+          return json.loads(text, parse_constant=_reject)
+      except (json.JSONDecodeError, ValueError):
+          return None
+
+starter_code: |
+  def extract(text):
+      """Strip a code fence and any conversational padding."""
+      return text.strip()
+
+
+  def mechanical(text):
+      """Deterministic fixes for the malformations models actually produce."""
+      return text.replace("'", '"')
+
+
+  def repair(text):
+      """Parse as-is, then after extraction, then after mechanical fixes."""
+      return parse(text)
+
+
+  for name, raw in CASES.items():
+      print(f"{name:<16} -> {repair(raw)}")
+
+tests: |
+  # Every case except the hopeless one must survive the ladder.
+  for name, raw in CASES.items():
+      got = repair(raw)
+      if name == "hopeless":
+          assert got is None, f"{name!r} contains no JSON at all; expected None, got {got!r}"
+          continue
+      assert got is not None, (
+          f"repair() returned None for the {name!r} case. The ladder has three "
+          "rungs — parse as-is, parse after extract(), parse after "
+          "mechanical(extract(...)) — and each one has to be tried in turn."
+      )
+      assert isinstance(got, dict), f"{name!r} should recover an object, got {type(got).__name__}"
+      assert got["id"] == "a1", f"{name!r} recovered the wrong value: {got}"
+
+  # The guard. An apostrophe inside a valid double-quoted string must survive.
+  got = repair(CASES["apostrophe"])
+  assert got["note"] == "customer's address", (
+      f"the apostrophe case came back as {got!r}. Replacing every ' with \" "
+      "corrupts apostrophes inside legitimately double-quoted strings — a "
+      "repair that damages well-formed input is worse than no repair. Apply "
+      "the single-quote fix only when the document has no double quotes at all."
+  )
+
+  # Extraction alone, without the mechanical rung.
+  assert parse(extract(CASES["fenced"])) == {"id": "a1", "qty": 3}
+  assert parse(extract(CASES["preamble"])) == {"id": "a1", "qty": 3}
+  assert extract('{"a": 1}') == '{"a": 1}', "already-clean input must be left alone"
+
+  # Mechanical fixes, each on its own.
+  assert parse(mechanical('{"a": 1,}')) == {"a": 1}, "trailing comma"
+  assert parse(mechanical('{"a": NaN}')) == {"a": None}, "NaN is not valid JSON"
+  assert parse(mechanical('{a: 1}')) == {"a": 1}, "unquoted key"
+  assert parse(mechanical("{'a': 1}")) == {"a": 1}, "single-quoted document"
+
+  # The ladder must be cheapest-first: clean input parses at the first rung
+  # and is never touched by a repair.
+  assert repair(CASES["clean"]) == {"id": "a1", "qty": 3}
+
+  # An object nested inside prose is still recoverable.
+  assert repair('Sure!\n{"id": "a1", "qty": 3}\nHope that helps.')["qty"] == 3
+
+hints:
+  - "`extract` should find the first `{` and the last `}` and slice between them — after stripping a fence if one is present."
+  - "`mechanical` needs four separate fixes. Use `re.sub` for the trailing comma (`,\\s*([}\\]])`), the literals, and the unquoted keys (`([{,]\\s*)(\\w+)(\\s*:)`)."
+  - "Guard the quote swap: `if '\"' not in text and \"'\" in text`. And `repair` should try `parse(text)`, then `parse(extract(text))`, then `parse(mechanical(extract(text)))`."
+
+solution: |
+  def extract(text):
+      fenced = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
+      if fenced:
+          text = fenced.group(1)
+      start, end = text.find("{"), text.rfind("}")
+      return text[start:end + 1] if 0 <= start < end else text
+
+
+  def mechanical(text):
+      text = re.sub(r",\s*([}\]])", r"\1", text)
+      text = re.sub(r"\bNaN\b|\bInfinity\b", "null", text)
+      if '"' not in text and "'" in text:
+          text = text.replace("'", '"')
+      return re.sub(r"([{,]\s*)(\w+)(\s*:)", r'\1"\2"\3', text)
+
+
+  def repair(text):
+      for candidate in (text, extract(text), mechanical(extract(text))):
+          parsed = parse(candidate)
+          if parsed is not None:
+              return parsed
+      return None
+
+
+  for name, raw in CASES.items():
+      print(f"{name:<16} -> {repair(raw)}")

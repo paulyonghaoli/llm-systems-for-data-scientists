@@ -20,15 +20,15 @@ cost, and no live API calls anywhere in the material.
 ## Status — P1 in progress, 2026-08-09
 
 P0 complete (platform + exemplar lesson). Course I under way: **Modules 0 and
-1 complete, Module 2 at 2.3 of 5**.
+1 complete, Module 2 at 2.4 of 5**.
 
 | | |
 |---|---|
-| Lessons | 13 — Module 0 (0.1–0.5), Module 1 (1.1–1.5), Module 2 (2.1–2.3) |
-| In-browser exercises | 28 |
-| Quiz questions | 106 across 13 banks |
+| Lessons | 14 — Module 0 (0.1–0.5), Module 1 (1.1–1.5), Module 2 (2.1–2.4) |
+| In-browser exercises | 30 |
+| Quiz questions | 114 across 14 banks |
 | Autograded mini-projects | 2 |
-| Experiments | 12, plus 7 generated figures and one hand-run fixture recorder |
+| Experiments | 13, plus 8 generated figures and one hand-run fixture recorder |
 | Capstones | 0 (Capstone I closes P1) |
 | CI gates | 23, run as 14 commands |
 

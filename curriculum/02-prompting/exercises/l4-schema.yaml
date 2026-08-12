@@ -1,0 +1,137 @@
+id: prm-l4-schema
+title: "Validate the shape, including the bool trap"
+lesson: modules/02-prompting/04-structured-output
+description: |
+  Implement `schema_ok(obj)`, which returns whether a parsed output satisfies
+  the contract:
+
+  | Key | Type | Constraint |
+  |---|---|---|
+  | `record_id` | `str` | required |
+  | `status` | `str` | required, one of `fulfilled` / `pending` / `cancelled` |
+  | `quantity` | `int` | required |
+
+  Extra keys are allowed. Missing keys, wrong types and unknown statuses are
+  not.
+
+  One hazard is worth knowing before you start: in Python `bool` is a subclass
+  of `int`, so `isinstance(True, int)` is `True` and a quantity of `true`
+  sails through a bare type check. The tests care about that case.
+
+setup_code: |
+  ALLOWED_STATUS = {"fulfilled", "pending", "cancelled"}
+  REQUIRED = {"record_id": str, "status": str, "quantity": int}
+
+  def record(**overrides):
+      """A valid record, with any field replaced by keyword argument.
+
+      Pass a field as None to delete it: record(status=None) omits 'status'.
+      """
+      base = {"record_id": "a1f3c9", "status": "fulfilled", "quantity": 17}
+      base.update(overrides)
+      return {k: v for k, v in base.items() if v is not None}
+
+starter_code: |
+  def schema_ok(obj):
+      """True if obj satisfies the contract in the description."""
+      for key, typ in REQUIRED.items():
+          if key not in obj:
+              return False
+          if not isinstance(obj[key], typ):
+              return False
+      return obj["status"] in ALLOWED_STATUS
+
+
+  for label, candidate in [
+      ("valid       ", record()),
+      ("bool qty    ", record(quantity=True)),
+      ("string qty  ", record(quantity="17")),
+      ("bad status  ", record(status="shipped")),
+      ("not a dict  ", ["record_id", "a1f3c9"]),
+  ]:
+      try:
+          print(f"{label} -> {schema_ok(candidate)}")
+      except Exception as e:
+          print(f"{label} -> raised {type(e).__name__}: {e}")
+
+tests: |
+  # The happy path, and extra keys are fine.
+  assert schema_ok(record()) is True, "a fully valid record must pass"
+  assert schema_ok(record(note="address unverified")) is True, (
+      "extra keys are permitted; the contract lists what must be present, not "
+      "what must be absent"
+  )
+
+  # Missing required keys.
+  for missing in ("record_id", "status", "quantity"):
+      assert schema_ok(record(**{missing: None})) is False, (
+          f"a record with no {missing!r} passed validation, but the contract "
+          "lists it as required"
+      )
+
+  # The trap. bool is a subclass of int in Python, so isinstance(True, int)
+  # is True and a bare type check lets a boolean through as a quantity.
+  assert schema_ok(record(quantity=True)) is False, (
+      "quantity=True passed an integer check. In Python bool subclasses int, "
+      "so isinstance(True, int) is True — a boolean where a count belongs is "
+      "exactly the kind of thing a model emits when a field name is ambiguous, "
+      "and a bare isinstance will never catch it."
+  )
+  assert schema_ok(record(quantity=False)) is False
+
+  # Wrong types the obvious way round.
+  assert schema_ok(record(quantity="17")) is False, (
+      "a quantity that arrived as the string \"17\" is a schema violation, not "
+      "a value to coerce silently here"
+  )
+  assert schema_ok(record(record_id=12345)) is False
+  assert schema_ok(record(quantity=3.5)) is False, "a float is not an int"
+
+  # Enum constraint on status.
+  assert schema_ok(record(status="shipped")) is False, (
+      "'shipped' is a plausible status and is not in the permitted set; an "
+      "unrecognised enum value has to fail rather than pass as a string"
+  )
+  for good in ALLOWED_STATUS:
+      assert schema_ok(record(status=good)) is True
+
+  # Things that are not objects at all must fail rather than raise.
+  for junk in ([], ["record_id"], "a1f3c9", 42, None, [record()]):
+      assert schema_ok(junk) is False, (
+          f"schema_ok({junk!r}) must return False rather than raising — a "
+          "model can return a JSON array or a bare string, and the validator "
+          "is what stands between that and the rest of your pipeline"
+      )
+
+hints:
+  - "Two things are missing: a guard for inputs that are not dicts at all, and the bool case."
+  - "Start with `if not isinstance(obj, dict): return False`."
+  - "For the integer field, reject booleans explicitly: `if typ is int and isinstance(value, bool): return False` before the ordinary type check."
+
+solution: |
+  def schema_ok(obj):
+      if not isinstance(obj, dict):
+          return False
+      for key, typ in REQUIRED.items():
+          if key not in obj:
+              return False
+          value = obj[key]
+          # bool is a subclass of int, so this has to come first.
+          if typ is int and isinstance(value, bool):
+              return False
+          if not isinstance(value, typ):
+              return False
+      return obj["status"] in ALLOWED_STATUS
+
+
+  for label, candidate in [
+      ("valid       ", record()),
+      ("bool qty    ", record(quantity=True)),
+      ("string qty  ", record(quantity="17")),
+      ("bad status  ", record(status="shipped")),
+      ("not a dict  ", ["record_id", "a1f3c9"]),
+  ]:
+      try:
+          print(f"{label} -> {schema_ok(candidate)}")
+      except Exception as e:
+          print(f"{label} -> raised {type(e).__name__}: {e}")

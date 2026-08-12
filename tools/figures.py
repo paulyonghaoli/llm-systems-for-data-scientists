@@ -331,10 +331,58 @@ def fig_self_consistency(outdir: Path) -> None:
         _save(fig, "self-consistency", variant, outdir)
 
 
+def fig_structured_output(outdir: Path) -> None:
+    """The repair ladder, and the three layers it does and does not reach.
+
+    Drawn as two stacked panels because they answer different questions: what
+    each repair recovers, and what "recovered" still fails to guarantee.
+    """
+    from experiments.structured_output import compute
+
+    v = compute()
+
+    for variant, theme in THEMES.items():
+        fig, (top, bot) = plt.subplots(2, 1, figsize=(6.4, 5.2),
+                                       gridspec_kw={"height_ratios": [1, 1]})
+        for ax in (top, bot):
+            _style(ax, theme)
+
+        stages = ["raw\njson.loads", "+ strip fences\nand preamble",
+                  "+ mechanical\nfixes"]
+        vals = [v["raw_pct"], v["after_extract_pct"], v["after_mechanical_pct"]]
+        bars = top.bar(stages, vals, color=[theme["unpaired"], theme["accent"],
+                                            theme["paired"]], width=0.55)
+        for b, val in zip(bars, vals, strict=True):
+            top.annotate(f"{val:.1f}%", (b.get_x() + b.get_width() / 2, val + 1.5),
+                         ha="center", color=theme["fg"], fontsize=9)
+        top.set_ylim(0, 108)
+        top.set_ylabel("outputs that parse (%)")
+        top.set_title("Two deterministic repairs recover most of it, for nothing")
+
+        layers = ["parses", "parses AND\nmatches schema", "correct"]
+        parsed = v["after_mechanical_pct"]
+        vals2 = [parsed, parsed - v["parses_but_fails_schema_pct"], 0]
+        colours = [theme["paired"], theme["accent"], theme["grid"]]
+        bars2 = bot.bar(layers, vals2, color=colours, width=0.55)
+        for b, val, label in zip(bars2, vals2,
+                                 [f"{vals2[0]:.1f}%", f"{vals2[1]:.1f}%",
+                                  "not knowable\nwithout an evaluation"],
+                                 strict=True):
+            bot.annotate(label, (b.get_x() + b.get_width() / 2, max(val, 0) + 1.5),
+                         ha="center", color=theme["fg"], fontsize=8)
+        bot.set_ylim(0, 108)
+        bot.set_ylabel("share of all outputs (%)")
+        bot.set_title("Each layer is a weaker claim than the one before it")
+
+        fig.tight_layout()
+        _save(fig, "structured-output", variant, outdir)
+
+
 FIGURES = [
     fig_eval_power,
     fig_fewshot_selection,
     fig_self_consistency,
+    fig_structured_output,
     fig_aggregate_masking,
     fig_nucleus_temperature,
     fig_conversation_cost,
