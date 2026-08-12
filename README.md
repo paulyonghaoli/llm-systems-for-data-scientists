@@ -11,6 +11,7 @@ cost, and no live API calls anywhere in the material.
 - **Plan:** [PLAN.md](PLAN.md) — the governing document. Scope, the four-tier
   assessment ladder, the executable core, the 22 CI gates, and what is
   deliberately not being built.
+- **Repository:** <https://github.com/paulyonghaoli/llm-systems-for-data-scientists> — private.
 - **How to work on it:** [CONTRIBUTING.md](CONTRIBUTING.md)
 - **Live site:** <https://llm-systems-for-data-scientists.paullimale.workers.dev> — soft launch, so it is reachable but excluded
   from search engines by `docs/robots.txt` and a `noindex` meta tag. Toggle
