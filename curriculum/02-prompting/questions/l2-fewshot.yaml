@@ -1,0 +1,204 @@
+id: prm-l2
+lesson: modules/02-prompting/02-fewshot-selection
+title: "2.2 - Few-shot selection"
+questions:
+  - id: q1
+    type: single
+    difficulty: easy
+    prompt: >-
+      Why is choosing few-shot examples described as a retrieval problem rather
+      than a prompting problem?
+    options:
+      - text: "There is a query, a corpus, a similarity function and a budget of k slots — the whole retrieval vocabulary applies."
+        correct: true
+        explanation: >-
+          Which also means the answers retrieval reached long ago apply: the
+          best result set is not simply the k most similar items, because the
+          most similar items resemble each other as much as they resemble the
+          query.
+      - text: "Because the examples have to be fetched from a database."
+        explanation: >-
+          Where they are stored is irrelevant. The framing is about the shape
+          of the decision, not about the storage layer.
+      - text: "Because the model retrieves the examples itself."
+        explanation: >-
+          The model sees whatever you put in the prompt; the selection happens
+          entirely in your code before the call.
+      - text: "Because the examples must be embedded with the same model as the query."
+        explanation: >-
+          They must be embedded consistently, which is true and is a detail
+          rather than the reason for the framing.
+
+  - id: q2
+    type: numeric
+    difficulty: easy
+    answer: 22.5
+    tolerance: 2
+    prompt: >-
+      In this lesson's experiment at k = 5, what percentage of prompts built by
+      selecting examples at random contained no example of the query's own
+      label?
+    explanation: >-
+      22.5%. Roughly one prompt in four asked the model to produce a label it
+      had not been shown a single instance of. Every informed strategy takes
+      this to essentially zero at that k, which is the cheapest available
+      argument that selection matters at all.
+
+  - id: q3
+    type: single
+    difficulty: medium
+    prompt: >-
+      Top-k selection scored the highest relevance and the *lowest* label
+      coverage. What is the practical cost of that combination?
+    options:
+      - text: "Slots spent on near-duplicates — five examples showing only about 2.8 distinct labels."
+        correct: true
+        explanation: >-
+          The most similar items resemble each other, so roughly two of the
+          five slots restate something the model has already been shown, and
+          the decision boundary is demonstrated from one side only.
+      - text: "The model sees examples that are irrelevant to the query."
+        explanation: >-
+          The opposite: top-k maximises relevance by construction. Its problem
+          is redundancy, not irrelevance.
+      - text: "The prompt exceeds the context window."
+        explanation: >-
+          Every strategy selects the same number of examples, so the token cost
+          is roughly equal across them.
+      - text: "It cannot find an example of the query's own label."
+        explanation: >-
+          On this pool it found one every single time — which was the
+          prediction the experiment falsified.
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      At k = 3 with five labels, balanced selection had 100% label coverage and
+      supplied the query's own label only 60% of the time. How are both true?
+    options:
+      - text: "Coverage counts distinct labels against the most k allows — three — while nothing in the round-robin consults the query."
+        correct: true
+        explanation: >-
+          The metric measures exactly what it claims and is the wrong thing to
+          optimise alone. Round-robin order is fixed, so it spends scarce slots
+          on labels chosen without reference to what was asked.
+      - text: "The coverage metric is computed incorrectly."
+        explanation: >-
+          It is computed as distinct labels divided by min(k, number of
+          labels), which is the honest denominator when k is the binding
+          constraint.
+      - text: "The pool does not contain enough examples of some labels."
+        explanation: >-
+          The pool is balanced with eight examples per label; the constraint is
+          k, not availability.
+      - text: "Similarity was not used within each label."
+        explanation: >-
+          It was — balance chooses which labels, similarity chooses which
+          example of each. That affects which example, not which label.
+
+  - id: q5
+    type: single
+    difficulty: medium
+    prompt: "When is round-robin label balance a safe default?"
+    options:
+      - text: "When k is at least the number of labels; below that it is actively harmful."
+        correct: true
+        explanation: >-
+          A one-line check that almost nobody states. Above the threshold it
+          guarantees an example of every label including the right one; below
+          it, it sacrifices the query's own label to satisfy a coverage
+          objective you introduced.
+      - text: "Whenever the label distribution in the pool is imbalanced."
+        explanation: >-
+          Pool imbalance is a reason to consider it, and does not address the
+          k threshold that determines whether it helps or hurts.
+      - text: "Always — coverage is strictly better than redundancy."
+        explanation: >-
+          At k = 3 with five labels it scored 60% on own-label against top-k's
+          95%, so "strictly better" is measurably false.
+      - text: "Only when the labels are lexically well separated."
+        explanation: >-
+          Separability determines whether similarity alone is already
+          label-correct. It is a different question from whether balance fits
+          in k slots.
+
+  - id: q6
+    type: multi
+    difficulty: medium
+    prompt: "Which statements about MMR are supported by the experiment?"
+    options:
+      - text: "It cut redundancy by about 63% for roughly 0.03 of mean similarity."
+        correct: true
+        explanation: >-
+          The kind of ratio that justifies making something a default, on this
+          pool.
+      - text: "Its redundancy penalty must be recomputed after every pick."
+        correct: true
+        explanation: >-
+          The penalty is a max over what has already been chosen, so it changes
+          as the set grows — which is why MMR cannot be expressed as a single
+          ranking.
+      - text: "At lambda = 1 it becomes equivalent to top-k."
+        correct: true
+        explanation: >-
+          The redundancy term is switched off entirely, leaving pure relevance.
+      - text: "It guarantees an example of the query's own label."
+        explanation: >-
+          It scored 97.5% at k = 5, slightly below top-k. It trades a little of
+          that for diversity.
+
+  - id: q7
+    type: single
+    difficulty: hard
+    prompt: >-
+      The experiment predicted top-k would often miss the query's own label,
+      and measured 100%. What is the right conclusion?
+    options:
+      - text: "On a pool whose labels use distinct vocabulary, nearest-neighbour selection is already label-correct — so separability is a property to measure on your own pool."
+        correct: true
+        explanation: >-
+          The prediction failed for a reason more useful than the result would
+          have been. Where labels share vocabulary — intents differing by
+          nuance rather than topic — the argument for explicit balance gets
+          much stronger.
+      - text: "Top-k is the best strategy and the others are unnecessary."
+        explanation: >-
+          It also had the highest redundancy and lowest coverage, so it wins on
+          one axis of three.
+      - text: "The experiment is flawed and should be discarded."
+        explanation: >-
+          It measured something true about this pool. The error was in the
+          prediction, and stating the condition under which it would differ is
+          the fix.
+      - text: "Label hit rate is not a useful metric."
+        explanation: >-
+          It is the most decisive of the four — it is simply saturated on this
+          particular pool, which is itself informative.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      What does this experiment establish about the *quality* of answers the
+      model produces?
+    options:
+      - text: "Nothing — it measures the composition of the example set, which is checkable without a model."
+        correct: true
+        explanation: >-
+          Whether a better-composed set produces better answers needs lesson
+          0.3's machinery on your own task. Selection arithmetic does not
+          substitute for an evaluation, and treating it as though it does is
+          the trap this whole module is written to avoid.
+      - text: "That MMR produces better answers than top-k."
+        explanation: >-
+          No model was involved anywhere in the experiment, so no claim about
+          answers is available from it.
+      - text: "That five examples are better than three."
+        explanation: >-
+          The k sweep shows how the strategies compare at different k, not
+          whether more examples produce better answers.
+      - text: "That random selection produces incorrect answers 22.5% of the time."
+        explanation: >-
+          It leaves 22.5% of prompts without an example of the needed label,
+          which is a statement about the prompt rather than about the answer.

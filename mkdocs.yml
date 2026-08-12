@@ -88,3 +88,4 @@ nav:
   - "Module 2 · Prompting & structured output":
       - Overview: modules/02-prompting/index.md
       - "2.1 Instruction structure and the trust boundary": modules/02-prompting/01-instruction-structure.md
+      - "2.2 Few-shot selection is a retrieval problem": modules/02-prompting/02-fewshot-selection.md

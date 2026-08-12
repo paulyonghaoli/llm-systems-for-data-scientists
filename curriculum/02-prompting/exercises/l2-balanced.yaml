@@ -1,0 +1,132 @@
+id: prm-l2-balanced
+title: "Balance the labels, and return k of them"
+lesson: modules/02-prompting/02-fewshot-selection
+description: |
+  Select `k` examples spread across the label space: walk the labels in a
+  fixed order, taking the most similar **unused** example of each, and keep
+  going round until you have `k`.
+
+  Two requirements that the obvious implementation misses:
+
+  1. **Return exactly `k` examples** whenever the pool has that many. A rule
+     that keeps one example per label returns as many examples as there are
+     labels, which is a different number and is usually smaller.
+  2. **Within a label, prefer the more similar example.** Balance decides
+     *which labels*; similarity still decides which example of each.
+
+  The label order is `sorted(set(labels))`, so the result is deterministic and
+  does not depend on the pool's ordering.
+
+setup_code: |
+  # Five candidates, already aligned by index.
+  SIM =    [0.91, 0.88, 0.80, 0.55, 0.51, 0.40]
+  LABELS = ["billing", "billing", "billing", "shipping", "shipping", "returns"]
+
+  def label_counts(picked):
+      """How many of each label the selection contains."""
+      out = {}
+      for i in picked:
+          out[LABELS[i]] = out.get(LABELS[i], 0) + 1
+      return dict(sorted(out.items()))
+
+starter_code: |
+  def select_balanced(sim, labels, k):
+      """Round-robin over labels, most similar unused example of each."""
+      order = sorted(range(len(sim)), key=lambda i: -sim[i])
+      seen = set()
+      picked = []
+      for i in order:
+          if labels[i] not in seen:      # one per label, then stop
+              seen.add(labels[i])
+              picked.append(i)
+      return picked[:k]
+
+
+  for k in (2, 3, 5):
+      p = select_balanced(SIM, LABELS, k)
+      print(f"k={k}: picked {p}  labels {label_counts(p)}")
+
+tests: |
+  # Three labels in the pool, six candidates.
+
+  # 1. k below the label count: k distinct labels, the best of each.
+  p = select_balanced(SIM, LABELS, 2)
+  assert len(p) == 2, f"expected 2 picks, got {len(p)}"
+  assert sorted(label_counts(p).values()) == [1, 1], f"expected 2 labels, got {label_counts(p)}"
+  assert set(p) == {0, 5}, (
+      f"picked {sorted(p)}. Label order is sorted(set(labels)) = ['billing', "
+      "'returns', 'shipping'], so the first two rounds take the best 'billing' "
+      "(index 0) and the best 'returns' (index 5)."
+  )
+
+  # 2. k equal to the label count: exactly one of each.
+  p = select_balanced(SIM, LABELS, 3)
+  assert len(p) == 3
+  assert label_counts(p) == {"billing": 1, "returns": 1, "shipping": 1}, (
+      f"got {label_counts(p)} — with k equal to the number of labels every "
+      "label should appear exactly once"
+  )
+  assert set(p) == {0, 3, 5}, f"within each label, take the most similar: got {sorted(p)}"
+
+  # 3. k ABOVE the label count: keep going round. This is what the starter
+  #    cannot do, because it stops after one pass.
+  p = select_balanced(SIM, LABELS, 5)
+  assert len(p) == 5, (
+      f"asked for 5 examples and got {len(p)}. A rule that keeps one example "
+      "per label returns as many examples as there are labels — three here — "
+      "and silently under-fills the prompt. Keep cycling the labels until you "
+      "have k, taking the next most similar unused example of each."
+  )
+  assert label_counts(p) == {"billing": 2, "returns": 1, "shipping": 2}, (
+      f"got {label_counts(p)}: after one of each, the second round takes the "
+      "next best billing and shipping; 'returns' has no second example"
+  )
+
+  # 4. Asking for more than the pool holds returns the whole pool.
+  p = select_balanced(SIM, LABELS, 99)
+  assert sorted(p) == [0, 1, 2, 3, 4, 5]
+
+  # 5. A single-label pool degenerates to top-k.
+  p = select_balanced([0.9, 0.5, 0.7], ["a", "a", "a"], 2)
+  assert p == [0, 2], f"expected the two most similar, got {p}"
+
+  # 6. Deterministic: the same inputs give the same answer every time.
+  assert select_balanced(SIM, LABELS, 4) == select_balanced(SIM, LABELS, 4)
+
+  # 7. The trap from the lesson, made concrete. With k below the label count
+  #    this strategy cannot promise an example of any particular label.
+  p = select_balanced(SIM, LABELS, 2)
+  assert "shipping" not in label_counts(p), (
+      "with k=2 and three labels, round-robin reaches only the first two "
+      "labels in sorted order — so a 'shipping' query gets no 'shipping' "
+      "example. That is the k < number-of-labels failure measured in §G, and "
+      "it is a property of the strategy rather than a bug in your code."
+  )
+
+hints:
+  - "The starter takes one example per label and stops, so it can never return more examples than there are labels."
+  - "Group the candidate indices by label, each group sorted by descending similarity. Then loop over `sorted(set(labels))` repeatedly, popping the front of each group."
+  - "Stop as soon as `len(picked) == k`, and also stop if a whole pass adds nothing — otherwise a pool smaller than k loops forever."
+
+solution: |
+  def select_balanced(sim, labels, k):
+      by_label = {}
+      for i in sorted(range(len(sim)), key=lambda i: -sim[i]):
+          by_label.setdefault(labels[i], []).append(i)
+
+      picked = []
+      order = sorted(by_label)
+      while len(picked) < k:
+          progressed = False
+          for lab in order:
+              if by_label[lab] and len(picked) < k:
+                  picked.append(by_label[lab].pop(0))
+                  progressed = True
+          if not progressed:          # pool exhausted
+              break
+      return picked
+
+
+  for k in (2, 3, 5):
+      p = select_balanced(SIM, LABELS, k)
+      print(f"k={k}: picked {p}  labels {label_counts(p)}")

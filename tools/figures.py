@@ -245,8 +245,65 @@ def fig_design_costs(outdir: Path) -> None:
         _save(fig, "design-costs", variant, outdir)
 
 
+def fig_fewshot_selection(outdir: Path) -> None:
+    """How often the query's own label appears among the chosen examples, vs k.
+
+    The crossing is the finding: below k = number of labels, forcing balance
+    actively hurts the metric that matters most, because round-robin spends
+    scarce slots on labels the query has nothing to do with.
+    """
+    import json as _json
+    import random as _random
+
+    import numpy as _np
+
+    from experiments.fewshot_selection import POOL, SEED, STRATEGIES, tfidf
+
+    rows = [_json.loads(line) for line in POOL.read_text(encoding="utf-8").splitlines()]
+    labels = [r["label"] for r in rows]
+    vectors, _ = tfidf([r["text"] for r in rows])
+    pairwise = vectors @ vectors.T
+    n_labels = len(set(labels))
+    ks = [1, 2, 3, 4, 5, 6, 8, 10]
+
+    curves: dict[str, list[float]] = {}
+    for name, fn in STRATEGIES.items():
+        series = []
+        for k in ks:
+            rng = _random.Random(SEED)
+            hit = []
+            for q in range(len(rows)):
+                mask = [i for i in range(len(rows)) if i != q]
+                kwargs = ({"pairwise": pairwise[_np.ix_(mask, mask)]}
+                          if name == "mmr" else {})
+                picked = fn(pairwise[q, mask], [labels[i] for i in mask], k, rng, **kwargs)
+                hit.append(labels[q] in {labels[mask[i]] for i in picked})
+            series.append(100 * float(_np.mean(hit)))
+        curves[name] = series
+
+    for variant, theme in THEMES.items():
+        fig, ax = plt.subplots(figsize=(6.4, 4.0))
+        _style(ax, theme)
+        styles = {"random": ("-", theme["fg"]), "top_k": ("-", theme["unpaired"]),
+                  "mmr": ("-", theme["accent"]), "balanced": ("--", theme["paired"])}
+        for name, series in curves.items():
+            dash, colour = styles[name]
+            ax.plot(ks, series, dash, color=colour, linewidth=2, marker="o",
+                    markersize=4, label=name)
+        ax.axvline(n_labels, color=theme["fg"], linewidth=1, alpha=0.5)
+        ax.annotate(f"k = number of labels ({n_labels})", (n_labels + 0.15, 22),
+                    color=theme["fg"], fontsize=8)
+        ax.set_xlabel("examples selected (k)")
+        ax.set_ylabel("prompts containing an example of the query's own label (%)")
+        ax.set_title("Forcing label balance backfires below k = number of labels")
+        ax.set_ylim(0, 105)
+        ax.legend(loc="lower right", fontsize=8, frameon=False, labelcolor=theme["fg"])
+        _save(fig, "fewshot-selection", variant, outdir)
+
+
 FIGURES = [
     fig_eval_power,
+    fig_fewshot_selection,
     fig_aggregate_masking,
     fig_nucleus_temperature,
     fig_conversation_cost,

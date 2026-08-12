@@ -4,13 +4,13 @@
 sessions treat this file as authoritative and amend it when scope changes.
 
 **Where things stand:** **P0 complete**; **P1 (Course I) under way.**
-Modules 0 and 1 complete; Module 2 at 2.1 of 5. **The deepening backlog is
-cleared (2026-08-11): all eleven lessons meet gate 21**, at a median of 2,556
+Modules 0 and 1 complete; Module 2 at 2.2 of 5. **The deepening backlog is
+cleared (2026-08-11): every lesson meets gate 21**, at a median of 2,556
 words against the 2,500 floor, a mean sentence length of 25.7 words and 11.8%
-short sentences — up from 1,574 / 20.3 / 20.5% before the pass. Eleven lessons,
-24 exercises, 11 question banks (90 questions), 2 autograded mini-projects,
-10 experiments, 5 generated figures, 22 gates green and browser-verified. See
-§11–14 for the build logs. Next: lessons 2.2–2.5, then Module 3 on the corpus
+short sentences — up from 1,574 / 20.3 / 20.5% before the pass. Twelve lessons,
+26 exercises, 12 question banks (98 questions), 2 autograded mini-projects,
+11 experiments, 6 generated figures, 22 gates green and browser-verified. See
+§11–14 for the build logs. Next: lessons 2.3–2.5, then Module 3 on the corpus
 decided in §10a.
 
 **Audience.** Data scientists who are fluent in Python, pandas, NumPy, sklearn,

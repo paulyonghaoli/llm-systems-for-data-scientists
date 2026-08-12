@@ -1,0 +1,129 @@
+id: prm-l2-mmr
+title: "Maximal marginal relevance"
+lesson: modules/02-prompting/02-fewshot-selection
+description: |
+  Select `k` examples that are relevant to the query *and* unlike each other.
+
+  Build the set one element at a time. At each step score every remaining
+  candidate as
+
+  ```
+  score(i) = lam * sim[i] - (1 - lam) * max(pairwise[i][j] for j in chosen)
+  ```
+
+  and take the best. The redundancy term is a `max` over what you have already
+  chosen, so it changes after every pick — which is why this cannot be done as
+  a single sort, and why the starter's attempt to precompute it is wrong.
+
+  On the first iteration nothing has been chosen yet, so the redundancy term is
+  zero and the first pick is simply the most relevant example.
+
+setup_code: |
+  SIM = [0.90, 0.88, 0.86, 0.30, 0.28]
+
+  # Items 0, 1 and 2 are near-duplicates of each other; 3 and 4 are different
+  # from them and from each other.
+  PAIRWISE = [
+      [1.00, 0.95, 0.93, 0.05, 0.04],
+      [0.95, 1.00, 0.94, 0.06, 0.03],
+      [0.93, 0.94, 1.00, 0.04, 0.05],
+      [0.05, 0.06, 0.04, 1.00, 0.10],
+      [0.04, 0.03, 0.05, 0.10, 1.00],
+  ]
+
+  def relevance(picked):
+      """Mean similarity of the chosen items to the query."""
+      return sum(SIM[i] for i in picked) / len(picked)
+
+  def redundancy(picked):
+      """Mean pairwise similarity among the chosen items."""
+      pairs = [(a, b) for n, a in enumerate(picked) for b in picked[n + 1:]]
+      return sum(PAIRWISE[a][b] for a, b in pairs) / len(pairs) if pairs else 0.0
+
+starter_code: |
+  def select_mmr(sim, pairwise, k, lam=0.5):
+      """Pick k indices, trading relevance against redundancy."""
+      # Precompute each item's average similarity to everything else and
+      # subtract it once. (This is the bug: redundancy has to be measured
+      # against what you have ALREADY CHOSEN, not against the whole pool.)
+      penalty = [sum(row) / len(row) for row in pairwise]
+      scored = [(lam * sim[i] - (1 - lam) * penalty[i], i) for i in range(len(sim))]
+      scored.sort(reverse=True)
+      return [i for _, i in scored[:k]]
+
+
+  picked = select_mmr(SIM, PAIRWISE, 3)
+  print("picked     ", picked)
+  print("relevance  ", round(relevance(picked), 3))
+  print("redundancy ", round(redundancy(picked), 3))
+
+tests: |
+  picked = select_mmr(SIM, PAIRWISE, 3)
+
+  assert len(picked) == 3, f"expected 3 picks, got {len(picked)}"
+  assert len(set(picked)) == 3, f"picks must be distinct, got {picked}"
+
+  assert picked[0] == 0, (
+      f"the first pick was {picked[0]}, expected 0. With nothing chosen yet the "
+      "redundancy term is zero, so the first pick is simply the most relevant "
+      "item."
+  )
+
+  assert set(picked) != {0, 1, 2}, (
+      f"picked {sorted(picked)} — items 0, 1 and 2 are near-duplicates of each "
+      "other (pairwise similarity above 0.93), so choosing all three spends "
+      "three slots showing one thing. A redundancy penalty computed against "
+      "the whole pool is a constant per item and cannot prevent this; it has "
+      "to be measured against what has already been chosen."
+  )
+
+  assert 3 in picked or 4 in picked, "at least one dissimilar item should be chosen"
+  assert redundancy(picked) < 0.5, (
+      f"mean pairwise similarity among the picks is {redundancy(picked):.3f}; "
+      "a diversity-aware selection should be far below the 0.94 of the "
+      "near-duplicate cluster"
+  )
+
+  # lam = 1 ignores redundancy entirely and degenerates to top-k.
+  assert sorted(select_mmr(SIM, PAIRWISE, 3, lam=1.0)) == [0, 1, 2], (
+      "at lam=1.0 the redundancy term is switched off, so MMR must return the "
+      "three most relevant items"
+  )
+
+  # Asking for everything returns everything, in some order.
+  assert sorted(select_mmr(SIM, PAIRWISE, 5)) == [0, 1, 2, 3, 4]
+
+  # k = 1 is the most relevant item, whatever lam is.
+  for lam in (0.0, 0.5, 1.0):
+      assert select_mmr(SIM, PAIRWISE, 1, lam=lam) == [0]
+
+  # The greedy loop must not mutate its inputs.
+  before = [row[:] for row in PAIRWISE]
+  select_mmr(SIM, PAIRWISE, 3)
+  assert PAIRWISE == before, "select_mmr must not modify pairwise"
+
+hints:
+  - "The penalty cannot be precomputed, because it depends on which items have already been chosen. You need a loop that picks one at a time."
+  - "Keep `chosen = []` and `candidates = list(range(len(sim)))`. On each pass, score every remaining candidate and move the best one across."
+  - "`max((pairwise[i][j] for j in chosen), default=0.0)` gives the redundancy term and handles the empty first iteration."
+
+solution: |
+  def select_mmr(sim, pairwise, k, lam=0.5):
+      chosen = []
+      candidates = list(range(len(sim)))
+      while len(chosen) < k and candidates:
+          best, best_score = None, float("-inf")
+          for i in candidates:
+              red = max((pairwise[i][j] for j in chosen), default=0.0)
+              score = lam * sim[i] - (1 - lam) * red
+              if score > best_score:
+                  best, best_score = i, score
+          chosen.append(best)
+          candidates.remove(best)
+      return chosen
+
+
+  picked = select_mmr(SIM, PAIRWISE, 3)
+  print("picked     ", picked)
+  print("relevance  ", round(relevance(picked), 3))
+  print("redundancy ", round(redundancy(picked), 3))

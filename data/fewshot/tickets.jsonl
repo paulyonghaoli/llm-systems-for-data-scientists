@@ -1,0 +1,40 @@
+{"text": "Where is my shipment TL-4471? It was due Tuesday and nothing has arrived.", "label": "where_is_it"}
+{"text": "Can you tell me the current location of order TL-9013?", "label": "where_is_it"}
+{"text": "Tracking has not updated in four days. Where is the parcel now?", "label": "where_is_it"}
+{"text": "I need the status of consignment TL-2288 please.", "label": "where_is_it"}
+{"text": "The tracking page just says in transit. Where is it actually?", "label": "where_is_it"}
+{"text": "No movement on my delivery since it left the depot. Where has it gone?", "label": "where_is_it"}
+{"text": "Could you locate shipment TL-6120 for me?", "label": "where_is_it"}
+{"text": "My order shows dispatched but I have no idea where it is.", "label": "where_is_it"}
+{"text": "My delivery is three days late and nobody has contacted me.", "label": "delivery_delay"}
+{"text": "The estimate moved from Tuesday to Thursday with no explanation.", "label": "delivery_delay"}
+{"text": "Why has my shipment been delayed again?", "label": "delivery_delay"}
+{"text": "This is the second time the delivery date has slipped.", "label": "delivery_delay"}
+{"text": "Promised next-day and it is now day four.", "label": "delivery_delay"}
+{"text": "The parcel is late and the new estimate keeps changing.", "label": "delivery_delay"}
+{"text": "Delayed at the depot for two working days, apparently.", "label": "delivery_delay"}
+{"text": "My consignment missed its delivery window entirely.", "label": "delivery_delay"}
+{"text": "The box arrived crushed and two items inside are broken.", "label": "damaged_item"}
+{"text": "Package turned up soaked through and the contents are ruined.", "label": "damaged_item"}
+{"text": "One of the units is cracked. It was clearly dropped.", "label": "damaged_item"}
+{"text": "Received the order but the seal was torn and parts are missing.", "label": "damaged_item"}
+{"text": "Item arrived damaged, photos attached.", "label": "damaged_item"}
+{"text": "The outer packaging was fine but the product inside is bent.", "label": "damaged_item"}
+{"text": "Delivered in poor condition, corner of the case is smashed.", "label": "damaged_item"}
+{"text": "Goods arrived broken and unusable.", "label": "damaged_item"}
+{"text": "I would like a refund on the shipping fee given the delay.", "label": "refund_request"}
+{"text": "Please refund this order, it is far too late to be useful.", "label": "refund_request"}
+{"text": "Can I get my money back for the express charge I paid?", "label": "refund_request"}
+{"text": "I want a full refund rather than a replacement.", "label": "refund_request"}
+{"text": "Requesting reimbursement for the postage on a late parcel.", "label": "refund_request"}
+{"text": "How do I claim the delivery cost back?", "label": "refund_request"}
+{"text": "Refund please, I no longer need the item.", "label": "refund_request"}
+{"text": "I paid for next-day and did not get it. I want that fee returned.", "label": "refund_request"}
+{"text": "I need to change the delivery address before it ships.", "label": "address_change"}
+{"text": "Can you redirect this parcel to my work address instead?", "label": "address_change"}
+{"text": "Wrong postcode on the order, please update it.", "label": "address_change"}
+{"text": "Please deliver to number 14 rather than 41, I mistyped it.", "label": "address_change"}
+{"text": "Moving house on Friday, can the address be updated?", "label": "address_change"}
+{"text": "The delivery address is missing the flat number.", "label": "address_change"}
+{"text": "Redirect to a collection point if possible.", "label": "address_change"}
+{"text": "Update the recipient address on consignment TL-7742 please.", "label": "address_change"}
