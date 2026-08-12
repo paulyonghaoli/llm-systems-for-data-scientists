@@ -1,0 +1,194 @@
+id: prm-l5
+lesson: modules/02-prompting/05-constrained-decoding
+title: "2.5 - Constrained decoding"
+questions:
+  - id: q1
+    type: single
+    difficulty: easy
+    prompt: >-
+      Why add negative infinity to the logits rather than zero the
+      probabilities after the softmax?
+    options:
+      - text: "`exp(-inf)` is exactly zero and the softmax renormalises for free; zeroing afterwards computes the forbidden mass and then discards it."
+        correct: true
+        explanation: >-
+          Zeroing after the fact also leaves a vector that no longer sums to 1
+          unless you renormalise by hand — one more step to get wrong.
+      - text: "Because probabilities cannot be set to zero."
+        explanation: >-
+          They can; the objection is that doing so is redundant work and needs
+          a manual renormalisation.
+      - text: "Because the mask must be multiplicative."
+        explanation: >-
+          The mask is additive in logit space, which is multiplicative in
+          probability space — that is exactly why it works.
+      - text: "To keep the forbidden tokens available at a low probability."
+        explanation: >-
+          The opposite of the intent. A forbidden token must have probability
+          exactly zero, or a sampler will occasionally choose it.
+
+  - id: q2
+    type: numeric
+    difficulty: medium
+    answer: 83.9
+    tolerance: 3
+    prompt: >-
+      In this lesson's 62-character record, what percentage of positions does
+      the grammar allow exactly one character at?
+    explanation: >-
+      83.9% — 52 of 62 positions. The model chooses ten characters and the
+      grammar writes the rest. Those 52 are the punctuation and key names,
+      which carry no information about this particular record, so the model is
+      doing all the work that matters and none of the work that does not.
+
+  - id: q3
+    type: single
+    difficulty: hard
+    prompt: >-
+      After enabling constrained decoding, your parse-error and
+      schema-violation rates both drop to zero. What has actually changed?
+    options:
+      - text: "Those two metrics now measure a property of the sampler rather than of your system; all remaining risk has moved into content."
+        correct: true
+        explanation: >-
+          The mask guarantees shape by construction, so the first two layers of
+          2.4's stack have become vacuous. Correctness is untouched, needs an
+          evaluation, and is now the only layer still capable of moving.
+      - text: "The system is now correct."
+        explanation: >-
+          Nothing in a mask addresses whether the values are right. A perfectly
+          valid record with a wrong id passes every check.
+      - text: "The model has improved."
+        explanation: >-
+          The model is unchanged; only the sampler's feasible set has narrowed.
+      - text: "Nothing meaningful — the technique is cosmetic."
+        explanation: >-
+          It genuinely removes an entire class of failure. The point is which
+          class, and what it leaves behind.
+
+  - id: q4
+    type: single
+    difficulty: medium
+    prompt: >-
+      What should a decoder do when the grammar's permitted set is empty?
+    options:
+      - text: "Stop — the document is complete and nothing may legally follow."
+        correct: true
+        explanation: >-
+          Treating it as an error reports a failure on every successfully
+          completed document. Sampling from it produces nan, since the
+          renormalisation divides by zero.
+      - text: "Fall back to the unconstrained distribution."
+        explanation: >-
+          That would emit a character after a finished document, which is the
+          one thing the grammar has established cannot happen.
+      - text: "Raise, since the grammar has failed."
+        explanation: >-
+          The grammar has succeeded. An empty set is how it signals
+          termination.
+      - text: "Sample uniformly from the vocabulary."
+        explanation: >-
+          Uniformly invalid rather than distributionally invalid is not an
+          improvement.
+
+  - id: q5
+    type: multi
+    difficulty: medium
+    prompt: >-
+      A variable-length field of one to three digits has just received its
+      first digit. Which characters are legal next?
+    options:
+      - text: "Any digit, because the field may continue."
+        correct: true
+        explanation: >-
+          One digit satisfies the minimum; the field is permitted but not
+          required to grow.
+      - text: "The literal that follows the field, because it may end here."
+        correct: true
+        explanation: >-
+          A variable-length field has two kinds of legal continuation once its
+          minimum is met, and forgetting the second is the common bug.
+      - text: "Nothing — the field is complete at one digit."
+        explanation: >-
+          It is complete *enough*, which is a different claim: continuing is
+          also legal, up to the maximum.
+      - text: "Any character, since the field is satisfied."
+        explanation: >-
+          Only two categories are viable. Everything else leaves the language.
+
+  - id: q6
+    type: single
+    difficulty: hard
+    prompt: >-
+      In what sense is constrained decoding the standard improvement on
+      rejection sampling, and what caveat comes with it?
+    options:
+      - text: "It builds the constraint into the sampler so every draw is feasible — and a feasible draw is still not a representative one."
+        correct: true
+        explanation: >-
+          2.4's repair ladder is generate-test-discard, which is rejection
+          sampling with extra steps. Forcing feasibility can land you where the
+          unconstrained distribution had almost no mass, which is valid output
+          the model would never have produced.
+      - text: "It is faster, and it changes nothing about the distribution."
+        explanation: >-
+          It does change the distribution — that is the whole mechanism. What
+          survives is renormalised.
+      - text: "It removes the need for a validator."
+        explanation: >-
+          The validator is the only thing that catches a bug in your own
+          grammar, and it costs microseconds.
+      - text: "It guarantees the highest-probability output."
+        explanation: >-
+          It guarantees the highest-probability *legal* output, which can be a
+          token the model assigned almost no mass to.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why keep a schema validator once the mask is in place, given that it can
+      no longer fail?
+    options:
+      - text: "It is the only thing that catches a bug in your own grammar, and it costs microseconds."
+        correct: true
+        explanation: >-
+          A mask built from the wrong schema produces confidently invalid
+          output that looks authoritative. Generating both the grammar and the
+          validator from one schema is better still.
+      - text: "Providers sometimes ignore the constraint."
+        explanation: >-
+          If the mask is applied, it is applied. The risk is that your grammar
+          is wrong, not that it is skipped.
+      - text: "For audit purposes only."
+        explanation: >-
+          It has a live function: it is the check on the checker.
+      - text: "There is no reason; it should be removed."
+        explanation: >-
+          Removing the only independent check on the grammar is exactly the
+          wrong response to the grammar becoming load-bearing.
+
+  - id: q8
+    type: single
+    difficulty: hard
+    prompt: >-
+      Token-level masking is harder than character-level. What is the specific
+      difficulty?
+    options:
+      - text: "A BPE token spans several characters, so it is permitted only if every character it contributes keeps the prefix viable — and tokens can straddle a field boundary."
+        correct: true
+        explanation: >-
+          This is where real implementations spend their complexity, and where
+          they get it wrong. The character-level version in this lesson makes
+          the automaton readable and reaches identical conclusions.
+      - text: "Vocabularies are too large to mask efficiently."
+        explanation: >-
+          A mask over 100,000 entries is a vector operation; size is not the
+          obstacle.
+      - text: "Tokens are not known until after sampling."
+        explanation: >-
+          The vocabulary is fixed and known before generation begins.
+      - text: "Byte-level tokenizers cannot be constrained at all."
+        explanation: >-
+          They can, and byte-level actually simplifies some cases since every
+          byte sequence is representable.

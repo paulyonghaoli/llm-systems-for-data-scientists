@@ -1,0 +1,129 @@
+id: prm-l5-mask
+title: "Mask the logits, not the probabilities"
+lesson: modules/02-prompting/05-constrained-decoding
+description: |
+  Given the model's logits and the set of characters a grammar permits,
+  produce the distribution a constrained sampler would draw from.
+
+  Build an additive mask — `0.0` for permitted tokens, `-inf` for everything
+  else — and add it to the logits **before** the softmax. Adding `-inf` sends
+  `exp` to exactly zero, so forbidden tokens receive no probability at all.
+
+  Two cases the tests care about:
+
+  - **An empty permitted set means the document is finished.** Return `None`
+    rather than a vector of `nan`; a decoder that treats "nothing may follow"
+    as an error reports a failure on every completed document.
+  - **Zeroing after the softmax is not equivalent.** It gives the same
+    numbers here and computes the forbidden mass before discarding it, which
+    is why the tests check that the mask is additive.
+
+setup_code: |
+  import numpy as np
+
+  VOCAB = ["{", "}", '"', "a", "b", "c", "1", "2", " "]
+
+  # What the model wanted, before any constraint. It is fairly sure the next
+  # character is 'a', and it has almost no interest in '{'.
+  LOGITS = np.array([-4.0, -3.0, 2.0, 5.0, 1.0, 0.5, -1.0, -1.5, 0.0])
+
+  def softmax(logits):
+      """Max-subtracted softmax over a 1-D array."""
+      z = np.asarray(logits, dtype=float)
+      z = z - z.max()
+      e = np.exp(z)
+      return e / e.sum()
+
+starter_code: |
+  def masked_probs(logits, permitted, vocab):
+      """Probabilities a constrained sampler would draw from.
+
+      permitted: a set of characters the grammar allows next.
+      Returns None when nothing may follow.
+      """
+      probs = softmax(logits)
+      for i, ch in enumerate(vocab):
+          if ch not in permitted:
+              probs[i] = 0.0
+      return probs
+
+
+  for permitted in ({'"'}, {"a", "b", "c"}, set()):
+      p = masked_probs(LOGITS, permitted, VOCAB)
+      print(f"{str(sorted(permitted)):<18} -> "
+            f"{'None' if p is None else np.round(p, 4)}")
+
+tests: |
+  def close(a, b, tol=1e-9):
+      return bool(np.all(np.abs(np.asarray(a) - np.asarray(b)) < tol))
+
+  # A single permitted character gets all of the probability, whatever the
+  # model wanted. Here '"' is not even the model's preferred token.
+  p = masked_probs(LOGITS, {'"'}, VOCAB)
+  assert p is not None, "a non-empty permitted set must return a distribution"
+  assert close(p.sum(), 1.0), (
+      f"the masked distribution sums to {p.sum():.6f}, not 1. Zeroing entries "
+      "without renormalising leaves a vector that is not a probability "
+      "distribution — adding -inf to the logits before the softmax "
+      "renormalises for free."
+  )
+  assert close(p[VOCAB.index('"')], 1.0), "the only legal token takes all the mass"
+  assert close(p[VOCAB.index("a")], 0.0), (
+      "'a' was the model's preferred token and the grammar forbids it, so it "
+      "must receive exactly zero — not a small residual"
+  )
+
+  # Several permitted characters keep their relative odds.
+  p = masked_probs(LOGITS, {"a", "b", "c"}, VOCAB)
+  assert close(p.sum(), 1.0)
+  ia, ib = VOCAB.index("a"), VOCAB.index("b")
+  assert close(p[ia] / p[ib], np.exp(LOGITS[ia] - LOGITS[ib])), (
+      "masking must not change the relative probabilities of the tokens that "
+      "survive; their ratio is still exp of the logit difference"
+  )
+  assert close(sum(p[VOCAB.index(c)] for c in "abc"), 1.0)
+  assert close(p[VOCAB.index("{")], 0.0)
+
+  # Forbidden tokens are exactly zero, not merely small.
+  assert p[VOCAB.index("1")] == 0.0, (
+      "a forbidden token has probability exactly 0.0. Adding -inf before the "
+      "softmax achieves that; subtracting a large finite number leaves a tiny "
+      "positive value that a sampler can still, very occasionally, choose."
+  )
+
+  # Permitting everything changes nothing.
+  assert close(masked_probs(LOGITS, set(VOCAB), VOCAB), softmax(LOGITS))
+
+  # An empty permitted set means the document is complete.
+  assert masked_probs(LOGITS, set(), VOCAB) is None, (
+      "an empty permitted set means nothing may legally follow — the document "
+      "is finished. Returning a vector here produces nan (0/0 after "
+      "renormalising), and a decoder that raises on it reports a failure on "
+      "every successfully completed document."
+  )
+
+  # The input must not be modified.
+  before = LOGITS.copy()
+  masked_probs(LOGITS, {"a"}, VOCAB)
+  assert close(LOGITS, before), "masked_probs must not modify the logits it was given"
+
+hints:
+  - "Build the mask as an array first: `np.full(len(vocab), -np.inf)`, then set the permitted positions to 0.0."
+  - "Add the mask to the logits and pass the sum to `softmax`. Do not touch the probabilities afterwards."
+  - "Check for an empty `permitted` before doing any arithmetic and return None."
+
+solution: |
+  def masked_probs(logits, permitted, vocab):
+      if not permitted:
+          return None
+      mask = np.full(len(vocab), -np.inf)
+      for i, ch in enumerate(vocab):
+          if ch in permitted:
+              mask[i] = 0.0
+      return softmax(np.asarray(logits, dtype=float) + mask)
+
+
+  for permitted in ({'"'}, {"a", "b", "c"}, set()):
+      p = masked_probs(LOGITS, permitted, VOCAB)
+      print(f"{str(sorted(permitted)):<18} -> "
+            f"{'None' if p is None else np.round(p, 4)}")

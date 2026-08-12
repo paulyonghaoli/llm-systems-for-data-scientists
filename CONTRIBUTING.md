@@ -85,6 +85,14 @@ Every option in a multiple-choice question needs an `explanation`, including
 the correct one — a distractor without a reason is a missed lesson, and the
 schema check enforces it.
 
+**A starter's demo loop must not crash.** Starters usually print a few worked
+cases before the tests run, and an unguarded loop that raises partway through
+shows the learner a traceback from scaffolding rather than the behaviour the
+exercise is about. Wrap the loop so a raising case prints `raised TypeError`
+and the rest still run — the partial output *is* the diagnosis. Gate 24 catches
+a starter that will not compile; this one is a convention because a starter
+that raises at runtime is sometimes exactly right.
+
 **The starter's first failure is the exercise.** Whichever assertion a failing
 starter trips first is the only message most learners will read, so it has to
 say what went wrong and why — gate 23 rejects a bare `assert` in that position.
@@ -183,7 +191,7 @@ Repository visibility is not scripted anywhere; that stays a manual decision.
 
 ## The gates
 
-Twenty-three, listed in `PLAN.md` §7 and run by `tools/verify.py`. Seven are
+Twenty-four, listed in `PLAN.md` §7 and run by `tools/verify.py`. Seven are
 specific to this subject: no prompt-graded-by-mock, no network at test time,
 fixture integrity, volatility containment, lesson freshness, Pyodide import
 allowlist, and computed-number verification.

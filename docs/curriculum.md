@@ -19,7 +19,7 @@ real user.* ≈ 135 hrs.
 |---|---|
 | **0 · From data science to LLM systems** | [**complete**](modules/00-transition/index.md) |
 | **1 · Tokens, sampling and the API contract** | [**complete**](modules/01-tokens/index.md) |
-| **2 · Prompting and structured output** | [**2.1–2.4 available**](modules/02-prompting/index.md) · 2.5 planned |
+| **2 · Prompting and structured output** | [**all five lessons available**](modules/02-prompting/index.md) · mini-project planned |
 | 3 · Embeddings, retrieval and RAG | planned |
 | 4 · Agents and tool use | planned |
 | **Capstone I · Grounded assistant** | planned |

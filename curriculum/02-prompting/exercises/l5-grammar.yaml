@@ -1,0 +1,182 @@
+id: prm-l5-grammar
+title: "Which characters keep the prefix viable?"
+lesson: modules/02-prompting/05-constrained-decoding
+description: |
+  The mask is easy; computing what to mask is the work. Implement
+  `legal_next(prefix)` for a small fixed grammar:
+
+  ```
+  {"status": "<value>", "n": <digits>}
+  ```
+
+  where `<value>` is one of `pending`, `paid` or `posted`, and `<digits>` is
+  one to three digits.
+
+  A character is legal exactly when `prefix + character` can still be extended
+  into a complete valid document — **prefix viability**, which is the general
+  definition and the one worth remembering.
+
+  Three cases decide this exercise:
+
+  - The three status values share a prefix, so after `p` the legal set is
+    `{a, e, o}` — narrowing as the value is disambiguated.
+  - A variable-length field has *two* kinds of legal continuation once the
+    minimum is met: another field character, or the literal that follows it.
+  - A prefix that has already left the language has **no** legal continuation.
+
+setup_code: |
+  STATUSES = ("paid", "pending", "posted")
+  DIGITS = set("0123456789")
+
+  HEAD = '{"status": "'
+  MID = '", "n": '
+  TAIL = "}"
+
+  VALID = '{"status": "pending", "n": 17}'
+
+  def is_complete(text):
+      """True if text is exactly one valid document under this grammar."""
+      if not text.startswith(HEAD):
+          return False
+      rest = text[len(HEAD):]
+      for status in STATUSES:
+          if rest.startswith(status + MID):
+              digits = rest[len(status) + len(MID):]
+              return (digits.endswith(TAIL) and 1 <= len(digits) - 1 <= 3
+                      and set(digits[:-1]) <= DIGITS)
+      return False
+
+starter_code: |
+  def legal_next(prefix):
+      """Characters that could legally follow `prefix`. A set; empty when
+      nothing may follow."""
+      # Walk the literal head, then the status, then the rest.
+      if len(prefix) < len(HEAD):
+          return {HEAD[len(prefix)]}
+
+      rest = prefix[len(HEAD):]
+      live = [s for s in STATUSES if s.startswith(rest)]
+      if live:
+          return {s[len(rest)] for s in live}
+      return set()
+
+
+  for p in ["", '{"status', '{"status": "', '{"status": "p',
+            '{"status": "pending', '{"status": "pending", "n": 1', VALID]:
+      try:
+          print(f"{p!r:<34} -> {sorted(legal_next(p))}")
+      except Exception as e:
+          print(f"{p!r:<34} -> raised {type(e).__name__}")
+
+tests: |
+  # The literal head is forced, character by character.
+  assert legal_next("") == {"{"}, "an empty prefix admits only the opening brace"
+  assert legal_next('{"status') == {'"'}
+  assert legal_next(HEAD[:-1]) == {'"'}
+
+  # The shared prefix of the three status values narrows as it is consumed.
+  assert legal_next(HEAD) == {"p"}, (
+      f"got {sorted(legal_next(HEAD))}. All three permitted values begin with "
+      "'p', so exactly one character is legal here — the enum is being enforced "
+      "during generation."
+  )
+  assert legal_next(HEAD + "p") == {"a", "e", "o"}, (
+      f"got {sorted(legal_next(HEAD + 'p'))}, expected a, e and o — one for "
+      "'paid', 'pending' and 'posted'. The legal set narrows as the value is "
+      "disambiguated."
+  )
+  assert legal_next(HEAD + "pa") == {"i"}
+  assert legal_next(HEAD + "pos") == {"t"}
+
+  # A completed status is followed by the literal that comes next.
+  for status in STATUSES:
+      assert legal_next(HEAD + status) == {MID[0]}, (
+          f"after the complete status {status!r} the only legal character is "
+          f"{MID[0]!r}, the start of the literal that follows it — the starter "
+          "returns an empty set here because it stops after the status."
+      )
+
+  # The variable-length digit field: at least one digit, then EITHER another
+  # digit OR the closing brace.
+  base = HEAD + "pending" + MID
+  assert legal_next(base) == DIGITS, "the first digit is mandatory"
+  assert legal_next(base + "1") == DIGITS | {"}"}, (
+      f"got {sorted(legal_next(base + '1'))}. One digit satisfies the minimum, "
+      "so the field may continue OR end — a variable-length field has two kinds "
+      "of legal continuation once its minimum is met."
+  )
+  assert legal_next(base + "12") == DIGITS | {"}"}
+  assert legal_next(base + "123") == {"}"}, "three digits is the maximum"
+
+  # A complete document admits nothing.
+  assert legal_next(VALID) == set(), (
+      "a complete document has no legal continuation, and the empty set is how "
+      "the decoder learns to stop"
+  )
+
+  # Prefixes that have left the language.
+  for bad in ("X", '{"status": "q', '{"status": "paid!', base + "1234"):
+      assert legal_next(bad) == set(), (
+          f"{bad!r} cannot be extended into a valid document, so nothing is "
+          "legal after it"
+      )
+
+  # The invariant that ties it together: walking the document one character at
+  # a time, every actual character is in the legal set at that point.
+  for i in range(len(VALID)):
+      assert VALID[i] in legal_next(VALID[:i]), (
+          f"character {i} of a valid document ({VALID[i]!r}) was not in the "
+          "legal set — a grammar that forbids valid documents will make the "
+          "decoder produce confident nonsense"
+      )
+  assert is_complete(VALID)
+
+hints:
+  - "The starter handles the head and the status and then gives up. After a complete status you are into the MID literal, then the digits, then TAIL."
+  - "Track how much of the prefix you have consumed. After the status, compare the remainder against MID one character at a time, exactly as you did for HEAD."
+  - "For the digits: count how many you have. Fewer than 1 → only digits. Between 1 and 3 → digits plus '}'. Exactly 3 → only '}'."
+
+solution: |
+  def legal_next(prefix):
+      if len(prefix) < len(HEAD):
+          return {HEAD[len(prefix)]} if HEAD.startswith(prefix) else set()
+      if not prefix.startswith(HEAD):
+          return set()
+
+      rest = prefix[len(HEAD):]
+
+      # Still inside the status value.
+      done = [s for s in STATUSES if rest.startswith(s)]
+      if not done:
+          live = [s for s in STATUSES if s.startswith(rest)]
+          return {s[len(rest)] for s in live}
+
+      status = max(done, key=len)
+      rest = rest[len(status):]
+
+      # Walking the MID literal.
+      if len(rest) < len(MID):
+          return {MID[len(rest)]} if MID.startswith(rest) else set()
+      if not rest.startswith(MID):
+          return set()
+      rest = rest[len(MID):]
+
+      # The digit field, then the closing brace.
+      digits = 0
+      while digits < len(rest) and rest[digits] in DIGITS:
+          digits += 1
+      if digits > 3:
+          return set()
+      if digits == len(rest):
+          if digits == 0:
+              return set(DIGITS)
+          return set(DIGITS) | {TAIL} if digits < 3 else {TAIL}
+      return set() if rest[digits:] != TAIL else set()
+
+
+  for p in ["", '{"status', '{"status": "', '{"status": "p',
+            '{"status": "pending', '{"status": "pending", "n": 1', VALID]:
+      try:
+          print(f"{p!r:<34} -> {sorted(legal_next(p))}")
+      except Exception as e:
+          print(f"{p!r:<34} -> raised {type(e).__name__}")

@@ -54,6 +54,21 @@ def main() -> int:
                     f"description: give it a docstring or a `provided:` summary"))
         failures.extend(ContentError(f"exercise {ex_id}", e) for e in perrs)
 
+        # Gate 24. A starter must fail its TESTS, not fail to compile. Gate 4
+        # accepts a starter that cannot run at all, on the reasonable ground
+        # that it is certainly not passing — but a SyntaxError in scaffolding
+        # the author wrote shows the learner an error in code they did not
+        # write, about something the exercise is not teaching. Found by
+        # noticing a starter that printed nothing.
+        for field in ("setup_code", "starter_code", "solution", "tests"):
+            src = spec.get(field) or ""
+            try:
+                compile(src, f"<{ex_id}.{field}>", "exec")
+            except SyntaxError as e:
+                failures.append(ContentError(
+                    f"exercise {ex_id}",
+                    f"{field} does not compile: line {e.lineno}: {e.msg}"))
+
         # Gate 23. The first assertion a failing starter trips is the message
         # the learner actually reads, so it has to say something.
         first = starter_first_failure(spec)

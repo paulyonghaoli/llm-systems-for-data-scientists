@@ -9,7 +9,7 @@ Self-study, written up and shared. Static site, no backend, no accounts, no
 cost, and no live API calls anywhere in the material.
 
 - **Plan:** [PLAN.md](PLAN.md) — the governing document. Scope, the four-tier
-  assessment ladder, the executable core, the 23 CI gates, and what is
+  assessment ladder, the executable core, the 24 CI gates, and what is
   deliberately not being built.
 - **Repository:** <https://github.com/paulyonghaoli/llm-systems-for-data-scientists> — private.
 - **How to work on it:** [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -17,20 +17,21 @@ cost, and no live API calls anywhere in the material.
   from search engines by `docs/robots.txt` and a `noindex` meta tag. Toggle
   both together with `python tools/launch.py --go` / `--unlaunch`.
 
-## Status — P1 in progress, 2026-08-09
+## Status — P1 in progress, 2026-08-11
 
-P0 complete (platform + exemplar lesson). Course I under way: **Modules 0 and
-1 complete, Module 2 at 2.4 of 5**.
+P0 complete (platform + exemplar lesson). Course I under way: **Modules 0, 1
+and 2 all have their five lessons built.** Module 2's mini-project is the one
+outstanding piece before Module 3.
 
 | | |
 |---|---|
-| Lessons | 14 — Module 0 (0.1–0.5), Module 1 (1.1–1.5), Module 2 (2.1–2.4) |
-| In-browser exercises | 30 |
-| Quiz questions | 114 across 14 banks |
+| Lessons | 15 — Modules 0, 1 and 2, five lessons each |
+| In-browser exercises | 32 |
+| Quiz questions | 122 across 15 banks |
 | Autograded mini-projects | 2 |
-| Experiments | 13, plus 8 generated figures and one hand-run fixture recorder |
+| Experiments | 14, plus 8 generated figures and one hand-run fixture recorder |
 | Capstones | 0 (Capstone I closes P1) |
-| CI gates | 23, run as 14 commands |
+| CI gates | 24, run as 14 commands |
 
 Full scope is 4 courses, 16 modules, 87 lessons, 4 capstones — about 540
 learner-hours. Every phase is independently shippable; see PLAN.md §8.

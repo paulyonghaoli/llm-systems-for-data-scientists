@@ -4,14 +4,16 @@
 sessions treat this file as authoritative and amend it when scope changes.
 
 **Where things stand:** **P0 complete**; **P1 (Course I) under way.**
-Modules 0 and 1 complete; Module 2 at 2.4 of 5. **The deepening backlog is
-cleared (2026-08-11): every lesson meets gate 21**, at a median of 2,556
-words against the 2,500 floor, a mean sentence length of 25.7 words and 11.8%
-short sentences — up from 1,574 / 20.3 / 20.5% before the pass. Fourteen lessons,
-30 exercises, 14 question banks (114 questions), 2 autograded mini-projects,
-13 experiments, 8 generated figures, 23 gates green and browser-verified. See
-§11–14 for the build logs. Next: lesson 2.5, which closes Module 2, then Module 3 on the corpus
-decided in §10a.
+**Modules 0, 1 and 2 all have their five lessons built**; Module 2's
+mini-project is the one outstanding piece. The deepening backlog was cleared on
+2026-08-11 and **every lesson meets gate 21** — a median of 2,556 words against
+the 2,500 floor, mean sentence length 25.7 words, 11.8% short sentences, up
+from 1,574 / 20.3 / 20.5% before the pass.
+
+Fifteen lessons, 32 exercises, 15 question banks (122 questions), 2 autograded
+mini-projects, 14 experiments, 8 generated figures, 24 gates green and
+browser-verified. See §11–14 for the build logs. Next: Module 2's mini-project,
+then Module 3 on the corpus decided in §10a.
 
 **Audience.** Data scientists who are fluent in Python, pandas, NumPy, sklearn,
 statistics, experiment design and offline evaluation — and who have never
@@ -349,6 +351,7 @@ CI was red. `tools/check_one.py <exercise-id>` is the way to iterate on one item
 | 21 | **Lesson depth and prose style** — ≥2,500 words, mean sentence ≥22, ≤18% of sentences under 11 words | a "textbook-scale" claim that the text does not support, and notes-style prose that reads as an essay rather than a chapter |
 | 22 | **Figures match their code** — every committed SVG is byte-identical to a fresh render by `tools/figures.py` | a figure that has drifted from the experiment it illustrates — the pictorial version of the stale number gate 18 catches |
 | 23 | **The starter's first failure carries a message** — the first assertion a failing starter trips must explain itself | `an assertion failed`, which is the only thing a learner sees when the teaching surface of the exercise is a bare `assert` |
+| 24 | **Every exercise field compiles** — setup, starter, solution and tests must all parse | a `SyntaxError` in author-written scaffolding, which shows the learner an error in code they did not write about something the exercise is not teaching |
 
 Gates 12–18 are specific to this subject; 1–11, 19–20 and 22 are inherited; 21 and 23 are ours from the sibling robotics curriculum.
 
