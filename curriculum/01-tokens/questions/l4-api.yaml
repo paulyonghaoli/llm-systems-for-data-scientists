@@ -1,0 +1,190 @@
+id: tok-l4
+lesson: modules/01-tokens/04-api-contract
+title: "1.4 - The API contract"
+questions:
+  - id: q1
+    type: multi
+    difficulty: easy
+    prompt: "Which of these arrive as HTTP 200 and are still not a usable answer?"
+    options:
+      - text: "Generation cut off at `max_tokens`."
+        correct: true
+        explanation: >-
+          The call succeeded and the answer is incomplete. Only the finish
+          reason distinguishes it, and truncated JSON sometimes still parses.
+      - text: "The model declining to answer."
+        correct: true
+        explanation: >-
+          A refusal is a successful call with an output you did not want - a
+          quality event rather than a reliability one.
+      - text: "The model requesting a tool call."
+        correct: true
+        explanation: >-
+          Generation paused deliberately. Treating it as a final answer
+          returns the model's internal bookkeeping to your user.
+      - text: "A 400 for a malformed request."
+        explanation: >-
+          That is not a 200. It is a genuine rejection, and the correct
+          response is to fix the request rather than retry it.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: "Why should a 400 never be retried?"
+    options:
+      - text: "The server judged the request itself; an identical retry gets an identical rejection, and every attempt is billed."
+        correct: true
+        explanation: >-
+          Retrying is only useful when the failure is transient. A 4xx other
+          than 429 says the problem is in what you sent.
+      - text: "Retrying a 400 is blocked by most providers."
+        explanation: >-
+          Nothing blocks it. It simply fails again.
+      - text: "It would violate idempotency."
+        explanation: >-
+          Idempotency is about side effects, and a rejected request had none.
+      - text: "4xx errors are never transient."
+        explanation: >-
+          429 is a 4xx and is emphatically transient, which is exactly why it
+          gets its own branch.
+
+  - id: q3
+    type: numeric
+    difficulty: medium
+    answer: 218.66
+    tolerance: 5
+    prompt: >-
+      In this lesson's simulation, retrying immediately on rejection produced
+      how many attempts per successful request? (Two decimal places.)
+    explanation: >-
+      218.66. The work was 1,000 requests and the clients made over 218,000
+      attempts to complete it. The service was granted unlimited capacity in
+      the model; a real one degrades, which is how a busy provider becomes an
+      unavailable one.
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      Plain exponential backoff generated the fewest attempts per success
+      (2.44) of any policy tested. Why is it still the worst choice here?
+    options:
+      - text: "It took 2.31× the minimum possible time; the low attempt count comes from clients sleeping while capacity was free."
+        correct: true
+        explanation: >-
+          Minimising retries is minimising a cost, not achieving an outcome. A
+          policy can reach zero retries by never trying.
+      - text: "It has a higher p95 latency than full jitter."
+        explanation: >-
+          It does not, on these numbers. The separating quantity is completion
+          time.
+      - text: "It is not actually exponential."
+        explanation: >-
+          It is; doubling each attempt is what produces the deep sleeps.
+      - text: "It violates the server's Retry-After."
+        explanation: >-
+          Neither policy in the comparison uses Retry-After; the simulation
+          does not send one.
+
+  - id: q5
+    type: single
+    difficulty: medium
+    prompt: "What does 'full' jitter mean, and why not ±10%?"
+    options:
+      - text: "Uniform over the whole interval from 0 to the bound; a narrow band around a common value is still a common value."
+        correct: true
+        explanation: >-
+          The purpose is to break the synchronisation between clients that
+          collided at the same moment. A small perturbation leaves them
+          colliding.
+      - text: "Jitter applied to every attempt rather than only the first."
+        explanation: >-
+          Applying it to every attempt is correct and is not what "full"
+          refers to.
+      - text: "Jitter that can also be negative."
+        explanation: >-
+          A negative delay would mean retrying before the failure. The range
+          starts at zero.
+      - text: "Randomness drawn from a normal rather than a uniform distribution."
+        explanation: >-
+          The distribution family is not the point; the width of the support
+          is.
+
+  - id: q6
+    type: single
+    difficulty: medium
+    prompt: >-
+      Your retry policy allows up to 8 attempts with exponential backoff and a
+      30-second cap. What is missing?
+    options:
+      - text: "A bound on total elapsed time — this policy can keep one request alive for minutes."
+        correct: true
+        explanation: >-
+          Attempt counts and wall-clock budgets are different limits. A caller
+          waiting on the request has a deadline the attempt count knows
+          nothing about.
+      - text: "A larger cap."
+        explanation: >-
+          A larger cap makes the unbounded-time problem worse.
+      - text: "Jitter — which the description already implies."
+        explanation: >-
+          Jitter is genuinely missing from the description too, and the
+          elapsed-time bound is the one that turns a slow request into a hung
+          one.
+      - text: "Nothing; 8 attempts is a reasonable limit."
+        explanation: >-
+          It is a reasonable attempt limit and not a reasonable time limit,
+          and only one of those is stated.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: >-
+      You retry a request that created a record. Without an idempotency key,
+      what happens, and why is it hard to notice?
+    options:
+      - text: "The record is created twice, and your client believes it made one call."
+        correct: true
+        explanation: >-
+          The duplicate is invisible from the caller's side. An idempotency
+          key lets the server recognise the retry and return the original
+          result instead of repeating the work.
+      - text: "The second request fails with a conflict."
+        explanation: >-
+          Only if the server enforces uniqueness on something, which is a
+          different mechanism and usually not present.
+      - text: "Nothing; model APIs have no side effects."
+        explanation: >-
+          The model call may not, but the tool calls and downstream writes
+          your system makes around it certainly do.
+      - text: "The retry is deduplicated automatically by HTTP."
+        explanation: >-
+          HTTP defines idempotency for some methods by convention; it does not
+          implement deduplication for you.
+
+  - id: q8
+    type: single
+    difficulty: hard
+    prompt: >-
+      What does streaming change about error handling that non-streaming does
+      not?
+    options:
+      - text: "A failure can arrive after the user has already been shown part of an answer."
+        correct: true
+        explanation: >-
+          With a single body you either have a response or you do not. With a
+          stream, the error path has to cope with partial output already on
+          screen.
+      - text: "Errors can no longer be retried."
+        explanation: >-
+          They can, though the retry produces a fresh stream — which is part
+          of what makes the partial-output problem awkward.
+      - text: "Status codes are not available."
+        explanation: >-
+          The initial response still carries one; the difficulty is with
+          failures that occur after it.
+      - text: "It makes generation faster, so timeouts matter less."
+        explanation: >-
+          Streaming does not make generation faster. It changes when the user
+          sees the first token, which is a perception change, not a throughput
+          one.

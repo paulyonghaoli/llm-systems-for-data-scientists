@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass
+class RetrievalResult:
+    doc_id: str
+    score: float
+    rank: int
+
+
+def reciprocal_rank_fusion(
+    rankings: list[list[str]],
+    k: int = 60,
+) -> list[tuple[str, float]]:
+    """Fuse several ranked lists into one.
+
+    Each list contributes 1 / (k + rank) to every document it contains, so a
+    document that appears mid-list in every ranking can outrank one that is
+    first in a single ranking and absent from the rest.
+    """
+    scores: dict[str, float] = {}
+    for ranking in rankings:
+        for rank, doc_id in enumerate(ranking, start=1):
+            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank)
+    return sorted(scores.items(), key=lambda kv: -kv[1])
+
+
+def recall_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
+    if not relevant:
+        raise ValueError("recall is undefined with no relevant documents")
+    hits = len(set(retrieved[:k]) & relevant)
+    return hits / len(relevant)

@@ -1,0 +1,195 @@
+id: tok-l3
+lesson: modules/01-tokens/03-context-windows
+title: "1.3 - Context windows and chat templates"
+questions:
+  - id: q1
+    type: numeric
+    difficulty: easy
+    answer: 173
+    tolerance: 0
+    prompt: >-
+      Four messages of 24, 40, 60 and 30 content tokens. The chat template
+      wraps each message in 4 tokens, and every request ends with a 3-token
+      generation prompt. How many tokens are sent?
+    explanation: >-
+      154 content + (4 x 4) wrapper + 3 generation prompt = 173. The wrapper
+      is charged per message, not per token, so conversations made of many
+      short messages pay proportionally more of it.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      You count 188 tokens; the provider reports 303. The gap is stable across
+      requests. What is it?
+    options:
+      - text: "The chat template — role markers around every message, plus the generation prompt."
+        correct: true
+        explanation: >-
+          A stable gap is the template. A gap that *grows* faster than one
+          wrapper per message is a bug in your rendering, and that is the
+          thing worth alerting on.
+      - text: "The provider is over-billing."
+        explanation: >-
+          The tokens are real and the model reads them. They are simply not in
+          the text you wrote.
+      - text: "A different tokenizer version."
+        explanation: >-
+          Possible in principle and it would not produce a stable, structural
+          offset of this size on short messages.
+      - text: "The output tokens are being included in the prompt count."
+        explanation: >-
+          Providers report those separately, and the gap here appears before
+          any output exists.
+
+  - id: q3
+    type: single
+    difficulty: hard
+    prompt: >-
+      A 20-turn conversation's final prompt is about 1,455 tokens. Roughly what
+      is the total input billed across the whole conversation?
+    options:
+      - text: "About 15,400 tokens — every earlier turn was re-sent and re-billed."
+        correct: true
+        explanation: >-
+          The API is stateless, so request i contains messages 1..i and the
+          total is quadratic in the number of turns. Measured against a
+          stateless baseline, that is roughly 8.9 times more.
+      - text: "About 1,455 tokens — the final prompt contains everything."
+        explanation: >-
+          It contains everything *once*. You were charged for each earlier
+          prefix as it was sent.
+      - text: "About 2,900 tokens — roughly twice the final prompt."
+        explanation: >-
+          The factor is about 2.5 for a four-request conversation and grows
+          with length; by twenty turns it is nearer ten.
+      - text: "It depends entirely on the model and cannot be estimated."
+        explanation: >-
+          It depends on the per-exchange growth, which you can measure in one
+          conversation and then project.
+
+  - id: q4
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why is cost per conversation the number to bring to a planning
+      discussion, rather than cost per request?
+    options:
+      - text: "They differ by a factor that grows with conversation length, and only one of them is what you will actually be charged."
+        correct: true
+        explanation: >-
+          Per-request is the number in the dashboard, which is exactly why it
+          is the one people quote. It understates a long conversation by
+          roughly an order of magnitude.
+      - text: "Per-request figures are unreliable."
+        explanation: >-
+          They are perfectly reliable measurements of the wrong quantity.
+      - text: "Conversations are billed at a different rate."
+        explanation: >-
+          The rate is the same; the token count is not.
+      - text: "Because output tokens dominate in conversations."
+        explanation: >-
+          The resend is an *input* phenomenon, which is what makes it grow
+          quadratically.
+
+  - id: q5
+    type: multi
+    difficulty: medium
+    prompt: "Which invariants must a history-trimming policy preserve?"
+    options:
+      - text: "The system message survives."
+        correct: true
+        explanation: >-
+          Dropping it removes the instructions while the request still
+          succeeds — a behaviour change with no error to trace it to.
+      - text: "The kept history begins with a user message."
+        correct: true
+        explanation: >-
+          Otherwise the transcript opens with a reply to a question the model
+          cannot see, and it will sometimes answer the one it infers.
+      - text: "The most recent messages are kept."
+        correct: true
+        explanation: >-
+          Drop from the oldest end. Recency is almost always what the current
+          turn depends on.
+      - text: "The total number of messages stays even."
+        explanation: >-
+          Nothing requires an even count — a trimmed conversation ending on
+          the user's turn is exactly what you want.
+
+  - id: q6
+    type: single
+    difficulty: medium
+    prompt: >-
+      What is wrong with rendering the chat template yourself instead of using
+      the model's own renderer?
+    options:
+      - text: "Getting it approximately right degrades quality silently — there is no validation step to fail."
+        correct: true
+        explanation: >-
+          The template is a format the model was *trained* on rather than one
+          it checks. Send JSON to an XML endpoint and you get a 400; send a
+          slightly wrong template and you get a plausible, slightly worse
+          answer.
+      - text: "It is slower."
+        explanation: >-
+          String formatting is not the bottleneck anywhere in this stack.
+      - text: "The provider rejects non-canonical templates."
+        explanation: >-
+          Nothing rejects it. That is the problem.
+      - text: "It breaks token counting."
+        explanation: >-
+          It changes token counting, and the deeper issue is that the model
+          sees input unlike its training data.
+
+  - id: q7
+    type: single
+    difficulty: hard
+    prompt: >-
+      A JSON response was cut off by `max_tokens` and still parsed
+      successfully. How is that possible, and what should you have checked?
+    options:
+      - text: "A truncated object can still be syntactically valid; check the finish reason."
+        correct: true
+        explanation: >-
+          Truncation is not guaranteed to produce a syntax error — an array
+          cut after a complete element, or an object whose remaining fields
+          were optional, parses fine. The finish reason is the only reliable
+          signal.
+      - text: "It is not possible; truncated JSON always fails to parse."
+        explanation: >-
+          Frequently it does fail, which is what makes the cases where it does
+          not so dangerous.
+      - text: "The provider repairs truncated JSON automatically."
+        explanation: >-
+          No provider silently repairs your output; if one did, that would be
+          a worse problem.
+      - text: "Schema validation would have caught it."
+        explanation: >-
+          Often, and not reliably — a truncation that drops only optional
+          fields satisfies the schema.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why does splitting one 100-token message into four 25-token messages
+      cost more?
+    options:
+      - text: "The template wrapper is charged per message, so three extra wrappers are added."
+        correct: true
+        explanation: >-
+          The content is identical. This is also why conversations of many
+          short turns carry proportionally more overhead than a few long ones.
+      - text: "Shorter messages tokenize less efficiently."
+        explanation: >-
+          Tokenization does not know about message boundaries; the same text
+          produces the same content tokens.
+      - text: "Each message triggers a separate request."
+        explanation: >-
+          They are all in one request; that is why they share one generation
+          prompt.
+      - text: "It does not cost more."
+        explanation: >-
+          It costs three extra wrappers — small per message, and it compounds
+          because the whole history is re-sent every turn.

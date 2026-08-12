@@ -1,0 +1,116 @@
+id: tok-l5-cost
+title: "Three designs, one cost model"
+lesson: modules/01-tokens/05-costing-a-design
+description: |
+  Cost each architecture, in units of one input token, for a corpus of `n`
+  chunks.
+
+  ```
+  long context  = (s + n*c) + a*r
+  retrieval     = (s + min(k, n)*c) + a*r
+  map-reduce    = n * ((s + c) + mu*r)  +  (s + n*mu)  +  a*r
+  ```
+
+  The map-reduce line is the one worth reading twice. Each map call carries
+  its own copy of the instructions, so `s` is paid **n times** — a cost term
+  that does not exist in the other two designs and is invisible if you reason
+  about "total corpus tokens".
+
+setup_code: |
+  # Workload parameters, all knowable before writing any code.
+  C = 400      # tokens per chunk
+  S = 145      # system prompt + question, per call
+  K = 6        # chunks retrieved
+  A = 200      # answer tokens
+  MU = 60      # summary tokens emitted per map call
+  R = 4.0      # output tokens cost this many input tokens
+
+  DESIGNS = ("long_context", "retrieval", "map_reduce")
+
+starter_code: |
+  def cost_units(design, n, c=C, s=S, k=K, a=A, mu=MU, r=R):
+      """Cost of answering one question over n chunks, in input-token units."""
+      if design == "long_context":
+          return (s + n * c) + a * r
+      if design == "retrieval":
+          return (s + min(k, n) * c) + a * r
+      if design == "map_reduce":
+          return (s + n * c) + (s + n * mu) + a * r
+      raise ValueError(design)
+
+
+  for n in (10, 100, 1000):
+      row = "  ".join(f"{d}={cost_units(d, n):>9.0f}" for d in DESIGNS)
+      print(f"n={n:>5}  {row}")
+
+tests: |
+  def close(a, b, tol=1e-6):
+      return abs(a - b) < tol
+
+  # Hand-checkable at n = 1.
+  assert close(cost_units("long_context", 1), (145 + 400) + 800)
+  assert close(cost_units("retrieval", 1), (145 + 400) + 800)
+
+  # Map-reduce at n = 1: one map call (145 + 400 in, 60 out at 4x = 240)
+  # plus one reduce call (145 + 60 in, 200 out at 4x = 800).
+  assert close(cost_units("map_reduce", 1), (145 + 400 + 240) + (145 + 60 + 800)), (
+      f"got {cost_units('map_reduce', 1)}, expected 1790. Map-reduce makes n + 1 "
+      "calls, and every one of them carries the system prompt and pays the output "
+      "rate for what it emits."
+  )
+
+  # Retrieval is flat once n exceeds k - that flatness is the whole argument.
+  flat = [cost_units("retrieval", n) for n in (6, 100, 1000, 100000)]
+  assert len(set(flat)) == 1, f"retrieval cost moved with n: {flat}"
+
+  # The per-call overhead term. Doubling the system prompt must cost n times
+  # more in map-reduce and exactly once in the other two.
+  n = 100
+  for design, expected_extra in (("long_context", S), ("retrieval", S),
+                                 ("map_reduce", (n + 1) * S)):
+      base = cost_units(design, n)
+      doubled = cost_units(design, n, s=2 * S)
+      assert close(doubled - base, expected_extra), (
+          f"{design}: doubling the system prompt changed cost by "
+          f"{doubled - base:.0f}, expected {expected_extra:.0f}. In map-reduce the "
+          "instructions are re-sent once per chunk, so they are charged n + 1 "
+          "times - the largest single surprise in this model."
+      )
+
+  # Map output is priced at the output rate, so the price ratio touches it.
+  base = cost_units("map_reduce", 50)
+  dearer = cost_units("map_reduce", 50, r=8.0)
+  assert dearer > base + 50 * MU, (
+      "raising the price ratio must raise map-reduce cost by more than the "
+      "reduce call alone - every map call emits mu output tokens too"
+  )
+
+  # Ordering at scale: retrieval cheapest, map-reduce dearest.
+  costs = {d: cost_units(d, 1000) for d in DESIGNS}
+  assert costs["retrieval"] < costs["long_context"] < costs["map_reduce"], (
+      f"at n=1000 the ordering came out as {costs}"
+  )
+  assert costs["long_context"] / costs["retrieval"] > 100
+
+  assert cost_units("retrieval", 0) == S + A * R, "a corpus of nothing still costs one call"
+
+hints:
+  - "Only the map_reduce branch is wrong. Compare it with the formula in the description."
+  - "The starter charges the corpus once, as if map-reduce were a single call. It is n calls plus a reduce."
+  - "Write the per-map cost first: `per_map = (s + c) + mu * r`. Then the total is `n * per_map + (s + n * mu) + a * r`."
+
+solution: |
+  def cost_units(design, n, c=C, s=S, k=K, a=A, mu=MU, r=R):
+      if design == "long_context":
+          return (s + n * c) + a * r
+      if design == "retrieval":
+          return (s + min(k, n) * c) + a * r
+      if design == "map_reduce":
+          per_map = (s + c) + mu * r
+          return n * per_map + (s + n * mu) + a * r
+      raise ValueError(design)
+
+
+  for n in (10, 100, 1000):
+      row = "  ".join(f"{d}={cost_units(d, n):>9.0f}" for d in DESIGNS)
+      print(f"n={n:>5}  {row}")

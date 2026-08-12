@@ -1,0 +1,144 @@
+id: tr-l2-validate
+title: "Validation that checks more than syntax"
+lesson: modules/00-transition/02-anatomy
+description: |
+  Stage 5. `json.loads` succeeding tells you the model produced JSON. It tells
+  you nothing about whether the object is the one you asked for.
+
+  Write `validate(text, spec)`, returning a `(status, value)` pair:
+
+  - `("ok", obj)` — parsed on the first try and satisfies the spec
+  - `("repaired", obj)` — needed one repair, then satisfied the spec
+  - `("invalid", None)` — did not parse, or parsed but did not satisfy the spec
+
+  The one repair you are allowed is stripping a Markdown code fence, because
+  that is by far the most common way a model returns almost-JSON.
+
+setup_code: |
+  import json
+  import re
+
+  FENCE = re.compile(r"^\s*```(?:json)?\s*\n(.*?)\n?\s*```\s*$", re.S)
+
+  def strip_fence(text):
+      """Remove a surrounding ```json ... ``` fence, if there is one."""
+      m = FENCE.match(text)
+      return m.group(1) if m else text
+
+  # A spec is a mapping from required key to required Python type.
+  SPEC = {"answer": str, "confidence": float, "sources": list}
+
+  CLEAN = '{"answer": "yes", "confidence": 0.8, "sources": ["a"]}'
+  FENCED = '```json\n{"answer": "yes", "confidence": 0.8, "sources": ["a"]}\n```'
+  MISSING = '{"answer": "yes", "confidence": 0.8}'
+  WRONG_TYPE = '{"answer": "yes", "confidence": "high", "sources": ["a"]}'
+  EXTRA = '{"answer": "yes", "confidence": 0.8, "sources": ["a"], "note": "hi"}'
+  BROKEN = 'Sure! Here is the answer: yes.'
+
+starter_code: |
+  def validate(text, spec):
+      """Return ("ok" | "repaired" | "invalid", object_or_None)."""
+      try:
+          return "ok", json.loads(text)
+      except json.JSONDecodeError:
+          pass
+
+      repaired = strip_fence(text)
+      try:
+          return "repaired", json.loads(repaired)
+      except json.JSONDecodeError:
+          return "invalid", None
+
+
+  for name, sample in [("clean", CLEAN), ("fenced", FENCED),
+                       ("missing key", MISSING), ("wrong type", WRONG_TYPE),
+                       ("not json", BROKEN)]:
+      print(f"{name:12} -> {validate(sample, SPEC)[0]}")
+
+tests: |
+  status, obj = validate(CLEAN, SPEC)
+  assert status == "ok", f"got {status!r}"
+  assert obj["answer"] == "yes"
+
+  status, obj = validate(FENCED, SPEC)
+  assert status == "repaired", f"got {status!r} for fenced JSON"
+  assert obj["confidence"] == 0.8
+
+  status, obj = validate(BROKEN, SPEC)
+  assert status == "invalid" and obj is None
+
+  status, obj = validate(MISSING, SPEC)
+  assert status == "invalid", (
+      f"got {status!r}. This is valid JSON and it parses perfectly, but it has "
+      "no 'sources' key. Accepting it means a downstream KeyError at best, and "
+      "at worst an answer presented to a user with no citations - which looks "
+      "exactly like a cited one."
+  )
+
+  status, obj = validate(WRONG_TYPE, SPEC)
+  assert status == "invalid", (
+      f"got {status!r}. 'confidence' came back as the string 'high' rather than "
+      "a number. It parses; it is not usable. Comparing it to a threshold will "
+      "either raise or, in a language with looser rules than Python, quietly "
+      "do something wrong."
+  )
+
+  # Extra keys are fine - the spec says what is required, not what is forbidden.
+  status, obj = validate(EXTRA, SPEC)
+  assert status == "ok", f"got {status!r}; unexpected extra keys should not fail a request"
+
+  # An int where a float is wanted is acceptable; a bool is not, because in
+  # Python bool is a subclass of int and would sail through a naive check.
+  assert validate('{"answer": "y", "confidence": 1, "sources": []}', SPEC)[0] == "ok"
+  assert validate('{"answer": "y", "confidence": true, "sources": []}', SPEC)[0] == "invalid", (
+      "True passed as a float. In Python `isinstance(True, int)` is True, so a "
+      "type check written the obvious way accepts booleans everywhere a number "
+      "is expected."
+  )
+
+  # A JSON array is valid JSON and is not an object.
+  assert validate('[1, 2, 3]', SPEC)[0] == "invalid"
+
+hints:
+  - "Parsing and conforming are two separate questions. The starter only asks the first."
+  - "After a successful parse, check: is it a dict? does it have every key in `spec`? is each value the right type?"
+  - "For the float check, accept an int but reject a bool: `isinstance(v, bool)` must be False, and `isinstance(v, (int, float))` True."
+
+solution: |
+  def conforms(obj, spec):
+      if not isinstance(obj, dict):
+          return False
+      for key, want in spec.items():
+          if key not in obj:
+              return False
+          value = obj[key]
+          if isinstance(value, bool) and want is not bool:
+              return False
+          if want is float and isinstance(value, int):
+              continue
+          if not isinstance(value, want):
+              return False
+      return True
+
+
+  def validate(text, spec):
+      try:
+          obj = json.loads(text)
+      except json.JSONDecodeError:
+          obj = None
+      if obj is not None and conforms(obj, spec):
+          return "ok", obj
+
+      try:
+          repaired = json.loads(strip_fence(text))
+      except json.JSONDecodeError:
+          return "invalid", None
+      if conforms(repaired, spec):
+          return "repaired", repaired
+      return "invalid", None
+
+
+  for name, sample in [("clean", CLEAN), ("fenced", FENCED),
+                       ("missing key", MISSING), ("wrong type", WRONG_TYPE),
+                       ("not json", BROKEN)]:
+      print(f"{name:12} -> {validate(sample, SPEC)[0]}")

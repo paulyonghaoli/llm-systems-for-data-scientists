@@ -1,0 +1,119 @@
+id: tok-l4-classify
+title: "A 200 is not an answer"
+lesson: modules/01-tokens/04-api-contract
+description: |
+  Decide what to do with a response. Return exactly one of:
+
+  | Verdict | When |
+  |---|---|
+  | `"retry_after"` | 429 — the server will say when |
+  | `"retry"` | 5xx or a timeout — transient, worth another attempt |
+  | `"fail"` | any other 4xx — the server judged the request; retrying repeats it |
+  | `"truncated"` | 200, but generation stopped at `max_tokens` |
+  | `"refused"` | 200, but the model declined |
+  | `"tool_call"` | 200, and the model wants a tool run before it continues |
+  | `"accept"` | 200, finished naturally |
+
+  Status is checked first, then the finish reason. The whole exercise is that
+  the last four cases all arrive as **HTTP 200**.
+
+setup_code: |
+  TIMEOUT = -1   # a client-side timeout, with no status code at all
+
+  CASES = [
+      ({"status": 200, "finish_reason": "stop"}, "a normal answer"),
+      ({"status": 200, "finish_reason": "length"}, "cut off at max_tokens"),
+      ({"status": 200, "finish_reason": "content_filter"}, "declined"),
+      ({"status": 200, "finish_reason": "tool_calls"}, "wants a tool"),
+      ({"status": 429, "retry_after_ms": 800}, "rate limited"),
+      ({"status": 503}, "upstream unavailable"),
+      ({"status": 400}, "malformed request"),
+      ({"status": 401}, "bad credentials"),
+      ({"status": TIMEOUT}, "client timeout"),
+  ]
+
+starter_code: |
+  def classify(response):
+      """Return the verdict for a single response."""
+      status = response["status"]
+      if status == 200:
+          return "accept"
+      return "retry"
+
+
+  for response, label in CASES:
+      print(f"{label:<24} -> {classify(response)}")
+
+tests: |
+  def verdict(**kw):
+      return classify(kw)
+
+  # The four that are all HTTP 200.
+  assert verdict(status=200, finish_reason="stop") == "accept"
+
+  assert verdict(status=200, finish_reason="length") == "truncated", (
+      "a response cut off at max_tokens came back as 'accept'. It is a "
+      "successful HTTP call containing an incomplete answer, and it is "
+      "indistinguishable from a complete one without reading the finish reason "
+      "- truncated JSON sometimes still parses."
+  )
+  assert verdict(status=200, finish_reason="content_filter") == "refused", (
+      "a refusal came back as 'accept'. It is a quality event rather than a "
+      "reliability one; filing it under either 'accept' or 'retry' hides it "
+      "from the metric that should see it."
+  )
+  assert verdict(status=200, finish_reason="tool_calls") == "tool_call"
+
+  # Status wins over finish reason when both are present.
+  assert verdict(status=429, finish_reason="stop") == "retry_after"
+  assert verdict(status=500, finish_reason="stop") == "retry"
+
+  # Transient failures are worth another attempt.
+  for s in (500, 502, 503, 504):
+      assert verdict(status=s) == "retry", f"{s} should be retried"
+  assert verdict(status=TIMEOUT) == "retry", "a client timeout is transient"
+
+  # Requests the server has judged are not.
+  for s in (400, 401, 403, 404, 422):
+      assert verdict(status=s) == "fail", (
+          f"{s} came back as something other than 'fail'. The server has already "
+          "rejected this request on its merits; retrying it will be rejected "
+          "identically, and every attempt is billed."
+      )
+
+  # 429 is the one 4xx that is worth retrying.
+  assert verdict(status=429) == "retry_after"
+
+  # A missing finish reason on a 200 must not crash.
+  assert verdict(status=200) in {"accept", "truncated"}
+
+hints:
+  - "Handle 429 before the general 4xx rule, and check 5xx before 4xx."
+  - "The timeout sentinel is negative, so a plain `status >= 400` test will not catch it — give it its own branch."
+  - "Only after the status checks pass should you look at `response.get('finish_reason')`."
+
+solution: |
+  def classify(response):
+      status = response["status"]
+
+      if status == TIMEOUT:
+          return "retry"
+      if status == 429:
+          return "retry_after"
+      if status >= 500:
+          return "retry"
+      if status >= 400:
+          return "fail"
+
+      finish = response.get("finish_reason")
+      if finish == "length":
+          return "truncated"
+      if finish == "content_filter":
+          return "refused"
+      if finish == "tool_calls":
+          return "tool_call"
+      return "accept"
+
+
+  for response, label in CASES:
+      print(f"{label:<24} -> {classify(response)}")

@@ -1,0 +1,183 @@
+id: tr-l4
+lesson: modules/00-transition/04-cost-and-latency
+title: "0.4 - Cost and latency"
+questions:
+  - id: q1
+    type: numeric
+    difficulty: easy
+    answer: 20
+    tolerance: 1
+    prompt: >-
+      A request sends 100 input tokens and receives 100 output tokens. Output
+      tokens cost 4x input tokens. What percentage of the request's cost is
+      the input? (Whole number.)
+    explanation: >-
+      Cost is 100 + 400 = 500 units, so input is 100/500 = 20%. Equal token
+      counts do not mean equal cost, which is the whole reason to compute
+      shares of cost rather than shares of tokens.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      On a retrieval-augmented workload, input is 92% of tokens and 74% of
+      cost at a 4x price ratio. You must cut spend by trimming one side. Which?
+    options:
+      - text: "Prompts — a 30% cut saves about 22% of total spend, against about 8% for answers."
+        correct: true
+        explanation: >-
+          The saving from cutting a component is proportional to that
+          component's share of *cost*, and prompts are three quarters of it
+          here despite output tokens being individually dearer.
+      - text: "Answers — output tokens cost four times as much."
+        explanation: >-
+          True per token and misleading in aggregate. There are far fewer of
+          them, so four times a small number is still the smaller share.
+      - text: "Neither; the two are equivalent by construction."
+        explanation: >-
+          They are equivalent only when the two directions have equal cost
+          shares, which happens at one specific traffic shape and price ratio.
+      - text: "It cannot be determined without knowing the absolute prices."
+        explanation: >-
+          Only the ratio is needed. Absolute prices cancel out of every share
+          and every relative saving.
+
+  - id: q3
+    type: single
+    difficulty: medium
+    prompt: >-
+      For a workload sending 50-token prompts and generating 800-token
+      answers, which side dominates cost?
+    options:
+      - text: "Output, overwhelmingly — over 95% of spend at a 4x ratio."
+        correct: true
+        explanation: >-
+          Which lever is bigger is a question about your traffic shape, not a
+          general rule. Both this and the retrieval case are real, and they
+          point opposite ways.
+      - text: "Input, as in the retrieval case."
+        explanation: >-
+          The retrieval conclusion came from long prompts and short answers.
+          Reverse the shape and you reverse the conclusion.
+      - text: "They are roughly equal."
+        explanation: >-
+          800 x 4 against 50 is not close.
+      - text: "It depends on the model."
+        explanation: >-
+          It depends on the price ratio and the traffic shape, both of which
+          are stated here.
+
+  - id: q4
+    type: single
+    difficulty: medium
+    prompt: >-
+      Mean latency is 2260 ms and p95 is 4274 ms. Only 37% of requests are
+      slower than the mean. What does that tell you?
+    options:
+      - text: "The distribution is right-skewed: a small number of very slow requests pull the mean above the typical experience."
+        correct: true
+        explanation: >-
+          On a symmetric distribution half of the observations would exceed
+          the mean. 37% means the tail is doing the work, so the mean is a
+          summary of the system rather than of anyone's experience.
+      - text: "The measurements are unreliable."
+        explanation: >-
+          They are perfectly reliable; the summary statistic is just the wrong
+          one for the shape.
+      - text: "The p95 must be miscalculated."
+        explanation: >-
+          A p95 nearly twice the median is entirely normal for latency.
+      - text: "Most requests are slower than average."
+        explanation: >-
+          The opposite: most requests are *faster* than average, which is what
+          37% means.
+
+  - id: q5
+    type: single
+    difficulty: hard
+    prompt: "What is wrong with estimating p95 as `mean + 2 * stdev`?"
+    options:
+      - text: "It assumes a normal distribution, and latency is heavy-tailed; on realistic data it can be off by well over 50%."
+        correct: true
+        explanation: >-
+          On the fixture in this lesson's exercise it overshoots the true p95
+          by about 70%. Sorting the samples costs nothing and is exact.
+      - text: "It uses the sample standard deviation instead of the population one."
+        explanation: >-
+          A negligible difference at any realistic sample size, and not the
+          problem.
+      - text: "Two standard deviations is 95% only for a one-sided interval."
+        explanation: >-
+          The one-sided/two-sided detail is real but tiny next to the
+          normality assumption being false.
+      - text: "Nothing; it is a standard approximation."
+        explanation: >-
+          It is standard for normal data. Latency is the canonical example of
+          data that is not.
+
+  - id: q6
+    type: multi
+    difficulty: medium
+    prompt: "Why split latency into time-to-first-token and total?"
+    options:
+      - text: "They have different causes — queueing and prompt length versus generation length."
+        correct: true
+        explanation: >-
+          A single number cannot tell you which to fix, and the two fixes are
+          unrelated.
+      - text: "With streaming, TTFT is what the user actually experiences as responsiveness."
+        correct: true
+        explanation: >-
+          In the lesson's simulated workload TTFT is about 15% of median total
+          time, which is the entire argument for streaming.
+      - text: "TTFT is billed separately from the rest of the response."
+        explanation: >-
+          Billing is by token, not by phase.
+      - text: "Total latency cannot be measured without streaming."
+        explanation: >-
+          Total latency is the easiest thing to measure, streaming or not.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: "Why express cost in 'units of one input token' rather than in currency?"
+    options:
+      - text: "Ratios survive price changes; absolute prices are the fastest-decaying fact in this field."
+        correct: true
+        explanation: >-
+          A design document costed in currency is wrong within a quarter. One
+          costed in input-token units stays correct and converts in one
+          multiplication.
+      - text: "Because providers do not publish prices."
+        explanation: >-
+          They publish them prominently. The problem is that they change.
+      - text: "Because token counts are more accurate than currency amounts."
+        explanation: >-
+          Both are exact; one just goes stale.
+      - text: "To avoid currency conversion."
+        explanation: >-
+          A minor convenience, not the reason.
+
+  - id: q8
+    type: single
+    difficulty: hard
+    prompt: >-
+      A longer prompt costs more money. What is the second thing it costs?
+    options:
+      - text: "Time to first token — the whole prompt is processed before the first output token exists."
+        correct: true
+        explanation: >-
+          Context bloat is paid for twice, in the bill and in responsiveness.
+          Module 11 explains why prefill scales with prompt length.
+      - text: "Nothing else; generation speed depends only on output length."
+        explanation: >-
+          Generation speed does, but the wait before generation starts does
+          not.
+      - text: "Accuracy, always."
+        explanation: >-
+          Sometimes, sometimes the opposite - more context can help or hurt.
+          That is a measurement question, not a fixed cost.
+      - text: "Output token count, which scales with input."
+        explanation: >-
+          Output length is driven by the task and the instructions, not
+          mechanically by input length.

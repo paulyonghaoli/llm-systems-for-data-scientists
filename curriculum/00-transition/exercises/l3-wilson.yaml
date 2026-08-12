@@ -1,0 +1,98 @@
+id: tr-l3-wilson
+title: "An interval that behaves at small n"
+lesson: modules/00-transition/03-evaluation-breaks
+description: |
+  The interval everybody learns first is `p ± z·sqrt(p(1-p)/n)`. It is fine in
+  the middle of the range with plenty of data, and evaluation work is neither.
+
+  Implement the **Wilson score interval** instead:
+
+  ```
+  denom  = 1 + z²/n
+  centre = (p + z²/(2n)) / denom
+  half   = z · sqrt( p(1-p)/n + z²/(4n²) ) / denom
+  ```
+
+  Clamp the result to [0, 1]. Run the starter first and look at what the
+  normal approximation claims about 10 successes out of 10.
+
+setup_code: |
+  from math import sqrt
+
+  Z95 = 1.959963984540054
+
+starter_code: |
+  def wilson(successes, n, z=Z95):
+      """Return (lo, hi) for a proportion, as a 2-tuple of floats."""
+      if n == 0:
+          return (0.0, 1.0)
+      p = successes / n
+      half = z * sqrt(p * (1 - p) / n)
+      return (max(0.0, p - half), min(1.0, p + half))
+
+
+  for k, n in [(40, 50), (10, 10), (0, 20), (1, 3)]:
+      lo, hi = wilson(k, n)
+      print(f"{k}/{n}: [{lo:.3f}, {hi:.3f}]  width {hi - lo:.3f}")
+
+tests: |
+  def close(a, b, tol=1e-3):
+      return abs(a - b) < tol
+
+  # The headline case from lesson 0.3: 80% measured on 50 items.
+  lo, hi = wilson(40, 50)
+  assert close((hi - lo) / 2, 0.1088, 2e-3), (
+      f"half-width was {(hi - lo) / 2:.4f}, expected about 0.109 (10.9 points)"
+  )
+  assert lo < 0.80 < hi
+
+  # Ten out of ten. The normal approximation returns [1.0, 1.0]: perfection,
+  # with certainty, from ten observations.
+  lo, hi = wilson(10, 10)
+  assert close(hi, 1.0), "the upper bound at 100% observed should be 1.0"
+  assert 0.70 < lo < 0.75, (
+      f"lower bound was {lo:.4f}, expected about 0.722. If you got 1.0, you are "
+      "still using the normal approximation - at p = 1 it has zero width, and "
+      "claims that ten out of ten proves a 100% success rate exactly."
+  )
+
+  # Zero out of twenty: same problem at the other end.
+  lo, hi = wilson(0, 20)
+  assert close(lo, 0.0), "the lower bound at 0% observed should be 0.0"
+  assert 0.15 < hi < 0.18, (
+      f"upper bound was {hi:.4f}, expected about 0.161. Twenty consecutive "
+      "failures are perfectly compatible with a true success rate of 15%."
+  )
+
+  # Tiny n: wide, but still inside [0, 1] and still containing the estimate.
+  lo, hi = wilson(1, 3)
+  assert 0.0 <= lo < 1 / 3 < hi <= 1.0
+  assert hi - lo > 0.6, "with three observations the interval should be very wide"
+
+  # Bigger n narrows it, and the interval must always be a sane sub-range.
+  widths = [wilson(int(0.8 * n), n)[1] - wilson(int(0.8 * n), n)[0]
+            for n in (50, 200, 1000)]
+  assert widths[0] > widths[1] > widths[2], "more data must give a narrower interval"
+  for k, n in [(0, 1), (1, 1), (7, 9), (999, 1000)]:
+      lo, hi = wilson(k, n)
+      assert 0.0 <= lo <= hi <= 1.0, f"wilson({k}, {n}) returned [{lo}, {hi}]"
+
+hints:
+  - "The starter is the normal approximation. Wilson has three parts: a denominator, a shifted centre, and a half-width — none of which is just `p`."
+  - "`denom = 1 + z*z/n`, and the centre is `(p + z*z/(2*n)) / denom` — note that the centre is not p."
+  - "The half-width has a second term under the square root: `p*(1-p)/n + z*z/(4*n*n)`, and the whole thing is divided by `denom`."
+
+solution: |
+  def wilson(successes, n, z=Z95):
+      if n == 0:
+          return (0.0, 1.0)
+      p = successes / n
+      denom = 1 + z * z / n
+      centre = (p + z * z / (2 * n)) / denom
+      half = z * sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+      return (max(0.0, centre - half), min(1.0, centre + half))
+
+
+  for k, n in [(40, 50), (10, 10), (0, 20), (1, 3)]:
+      lo, hi = wilson(k, n)
+      print(f"{k}/{n}: [{lo:.3f}, {hi:.3f}]  width {hi - lo:.3f}")

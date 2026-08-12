@@ -1,0 +1,132 @@
+id: tr-l3-mcnemar
+title: "Use the pairing you already have"
+lesson: modules/00-transition/03-evaluation-breaks
+description: |
+  You ran both systems over the same items, so every item is a matched pair.
+  The information about which system is better lives entirely in the items
+  where they **disagree** — an item both got right, or both got wrong, says
+  nothing about which is better and only adds noise.
+
+  Implement `mcnemar(a, b)`, returning a dict with `b_only`, `a_only`,
+  `statistic` and `significant`, where:
+
+  ```
+  statistic   = |b_only - a_only| / sqrt(b_only + a_only)
+  significant = statistic > 1.96
+  ```
+
+  If nothing disagrees, the statistic is 0.0 and the result is not
+  significant.
+
+setup_code: |
+  from math import sqrt
+
+  Z95 = 1.959963984540054
+
+  def make_pair(both_ok, a_only, b_only, both_fail):
+      """Build two per-item outcome lists with exactly these counts."""
+      a = [True] * both_ok + [True] * a_only + [False] * b_only + [False] * both_fail
+      b = [True] * both_ok + [False] * a_only + [True] * b_only + [False] * both_fail
+      return a, b
+
+  def unpaired_significant(a, b):
+      """The two-proportion z-test, for comparison. Uses only the totals."""
+      n = len(a)
+      sa, sb = sum(a), sum(b)
+      pool = (sa + sb) / (2 * n)
+      se = sqrt(2 * pool * (1 - pool) / n)
+      if se == 0:
+          return False
+      return abs(sb / n - sa / n) / se > Z95
+
+  # 200 items. B wins 14 that A loses; A wins 3 that B loses.
+  A, B = make_pair(both_ok=157, a_only=3, b_only=14, both_fail=26)
+
+starter_code: |
+  def mcnemar(a, b):
+      """Compare two systems evaluated on the same items, in the same order."""
+      sa, sb = sum(a), sum(b)
+      b_only = max(0, sb - sa)
+      a_only = max(0, sa - sb)
+      n_disagree = b_only + a_only
+      if n_disagree == 0:
+          return {"b_only": 0, "a_only": 0, "statistic": 0.0, "significant": False}
+      statistic = abs(b_only - a_only) / sqrt(n_disagree)
+      return {
+          "b_only": b_only,
+          "a_only": a_only,
+          "statistic": statistic,
+          "significant": statistic > Z95,
+      }
+
+
+  print("totals:      A =", sum(A), " B =", sum(B), "of", len(A))
+  print("unpaired says significant?", unpaired_significant(A, B))
+  print("paired:", mcnemar(A, B))
+
+tests: |
+  r = mcnemar(A, B)
+
+  assert r["b_only"] == 14, (
+      f"b_only came out as {r['b_only']}, expected 14. The totals differ by 11, "
+      "but that is a net figure: B wins 14 items A loses and loses 3 it wins. "
+      "Counting from the totals throws away the pairing you are trying to use."
+  )
+  assert r["a_only"] == 3, f"a_only came out as {r['a_only']}, expected 3"
+  assert abs(r["statistic"] - 2.6679) < 1e-3, f"statistic {r['statistic']:.4f}, expected 2.6679"
+  assert r["significant"] is True
+
+  # The whole point, on this exact data:
+  assert unpaired_significant(A, B) is False, "sanity check on the setup"
+
+  # Identical totals, forty disagreements. A totals-based calculation sees
+  # nothing at all here; the pairing sees an even split, which is a real and
+  # different finding from "no disagreement".
+  a2, b2 = make_pair(both_ok=100, a_only=20, b_only=20, both_fail=60)
+  r2 = mcnemar(a2, b2)
+  assert sum(a2) == sum(b2), "sanity check on the setup"
+  assert r2["b_only"] == 20 and r2["a_only"] == 20, (
+      f"got b_only={r2['b_only']}, a_only={r2['a_only']}. The two systems score "
+      "identically overall and still disagree on 40 of 200 items. 'Same score' "
+      "and 'same behaviour' are different claims."
+  )
+  assert r2["statistic"] == 0.0 and r2["significant"] is False
+
+  # Perfect agreement: no information either way.
+  a3, b3 = make_pair(both_ok=120, a_only=0, b_only=0, both_fail=80)
+  r3 = mcnemar(a3, b3)
+  assert r3 == {"b_only": 0, "a_only": 0, "statistic": 0.0, "significant": False}
+
+  # A lopsided disagreement on very few items is still significant, because
+  # only the disagreements are counted.
+  a4, b4 = make_pair(both_ok=180, a_only=0, b_only=10, both_fail=10)
+  r4 = mcnemar(a4, b4)
+  assert r4["significant"] is True, (
+      "ten items where B wins and none where A does is a clear result even "
+      "though it is only 5% of the item set"
+  )
+
+hints:
+  - "`sum(b) - sum(a)` is a net difference. You need the two counts separately."
+  - "Walk the items together: `for x, y in zip(a, b)` and count the cases where they differ."
+  - "`b_only` counts items where y is True and x is False; `a_only` is the other way round."
+
+solution: |
+  def mcnemar(a, b):
+      b_only = sum(1 for x, y in zip(a, b) if y and not x)
+      a_only = sum(1 for x, y in zip(a, b) if x and not y)
+      n_disagree = b_only + a_only
+      if n_disagree == 0:
+          return {"b_only": 0, "a_only": 0, "statistic": 0.0, "significant": False}
+      statistic = abs(b_only - a_only) / sqrt(n_disagree)
+      return {
+          "b_only": b_only,
+          "a_only": a_only,
+          "statistic": statistic,
+          "significant": statistic > Z95,
+      }
+
+
+  print("totals:      A =", sum(A), " B =", sum(B), "of", len(A))
+  print("unpaired says significant?", unpaired_significant(A, B))
+  print("paired:", mcnemar(A, B))

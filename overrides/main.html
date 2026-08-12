@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{#
+  Soft-launch guard. `python tools/launch.py --go` removes the noindex tag;
+  `--unlaunch` restores it. Do not edit by hand — the script keeps this in
+  sync with docs/robots.txt.
+#}
+{% block extrahead %}
+  <meta name="robots" content="noindex, nofollow">
+{% endblock %}

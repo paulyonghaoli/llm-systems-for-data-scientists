@@ -1,0 +1,239 @@
+id: tok-l1
+lesson: modules/01-tokens/01-bpe
+title: "1.1 - Tokens and BPE"
+questions:
+  - id: q1
+    type: single
+    difficulty: easy
+    prompt: "What is the pre-tokenizer for?"
+    options:
+      - text: "To stop merges spanning boundaries between words, digits and punctuation."
+        correct: true
+        explanation: >-
+          Without it, the most frequent pair in English prose is something like
+          ". " or "e ", and the vocabulary fills up with glue that welds
+          unrelated things together.
+      - text: "To remove punctuation and normalise case before training."
+        explanation: >-
+          Modern tokenizers do neither. Lower-casing and stripping punctuation
+          would make decoding lossy, and the output has to reconstruct the
+          input exactly.
+      - text: "To map characters to integers."
+        explanation: >-
+          That is what the byte encoding does, and it happens after
+          pre-tokenization. The pre-tokenizer works on strings.
+      - text: "To split the corpus into training and validation sets."
+        explanation: >-
+          There is no validation split in BPE training. It is a counting
+          procedure, not a fitted model with a generalisation gap.
+
+  - id: q2
+    type: single
+    difficulty: easy
+    prompt: "What is `merge([1, 1, 1], (1, 1), 9)`?"
+    options:
+      - text: "`[9, 1]`"
+        correct: true
+        explanation: >-
+          The three symbols contain two overlapping occurrences of (1, 1) and
+          only the first can be taken. The third 1 has nothing left to pair
+          with.
+      - text: "`[9, 9]`"
+        explanation: >-
+          That would require using the middle 1 twice. Merges consume both of
+          their symbols.
+      - text: "`[9, 1, 1]`"
+        explanation: >-
+          This replaces the pair without removing the symbols it consumed. A
+          merge always shortens the sequence by one per replacement.
+      - text: "`[9]`"
+        explanation: >-
+          Three symbols cannot collapse into one with a single pair merge;
+          that would take two merges and a second vocabulary entry.
+
+  - id: q3
+    type: single
+    difficulty: medium
+    prompt: >-
+      While encoding, three learned merges are all applicable to the current
+      sequence. Which one fires?
+    options:
+      - text: "The one that was learned earliest during training."
+        correct: true
+        explanation: >-
+          Encoding replays training order. Lower merge id means learned
+          earlier, so you take the minimum id among the applicable pairs.
+      - text: "The one that appears leftmost in the sequence."
+        explanation: >-
+          This is the most common wrong implementation, and it is hard to
+          catch because the result still decodes correctly. It simply is not
+          the tokenizer the model was trained with.
+      - text: "The one that produces the longest token."
+        explanation: >-
+          Longest-match is how a different family of tokenizers works
+          (WordPiece-style greedy matching), but it is not BPE, and mixing the
+          two gives a vocabulary that disagrees with the model's.
+      - text: "The one that occurred most often in the training corpus."
+        explanation: >-
+          Frequency decides the order merges are *learned* in. Once training
+          is over that order is fixed, and frequency plays no further part.
+
+  - id: q4
+    type: multi
+    difficulty: medium
+    prompt: "Which of these are true of a byte-level BPE tokenizer?"
+    options:
+      - text: "There is no such thing as an out-of-vocabulary character."
+        correct: true
+        explanation: >-
+          Every string is bytes, and all 256 byte values are in the vocabulary
+          before training starts. Unseen text is expensive, never impossible.
+      - text: "The vocabulary is frozen before the model is trained and never changes."
+        correct: true
+        explanation: >-
+          This is what makes it a contract rather than a preprocessing step you
+          own.
+      - text: "In most modern vocabularies a leading space belongs to the word that follows it."
+        correct: true
+        explanation: >-
+          So "the" at the start of a string and " the" mid-sentence are
+          different tokens, with different ids and different learned
+          representations.
+      - text: "Two strings that decode identically must have encoded identically."
+        explanation: >-
+          False, and it is the reason a round-trip test cannot validate an
+          encoder. ['the', 're'] and ['ther', 'e'] both decode to "there".
+
+  - id: q5
+    type: numeric
+    difficulty: easy
+    answer: 272
+    tolerance: 3
+    prompt: >-
+      The Japanese sample in `data/samples/` is 256 characters long and costs
+      1.062 tokens per character under the `cl100k_base` vocabulary. How many
+      tokens is that? (Round to the nearest whole token.)
+    explanation: >-
+      256 x 1.062 is about 272. The same passage is 256 characters and 762
+      bytes; per character it costs about five times what English does.
+
+  - id: q6
+    type: single
+    difficulty: hard
+    prompt: >-
+      Your encoder round-trips perfectly on every string you try. What have you
+      established?
+    options:
+      - text: "That decoding inverts your encoding - and nothing about whether the token ids are right."
+        correct: true
+        explanation: >-
+          Round-tripping is necessary and very weak. Any self-consistent scheme
+          passes it, including one that disagrees with the model's vocabulary
+          on most inputs.
+      - text: "That your encoder matches the reference implementation."
+        explanation: >-
+          It does not. Two encoders can round-trip identically and produce
+          different token sequences for the same text.
+      - text: "That your merge ordering is correct."
+        explanation: >-
+          Merge ordering is exactly what round-tripping cannot see, because
+          every ordering produces a sequence that decodes back to the input.
+      - text: "That the vocabulary is large enough for the text you tested."
+        explanation: >-
+          Vocabulary size does not affect round-tripping at all - a tokenizer
+          with no merges whatsoever round-trips perfectly, one byte at a time.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: >-
+      You ask for `vocab_size=1024` and the trained tokenizer reports 819
+      symbols. What happened?
+    options:
+      - text: "Training stopped early because no remaining pair occurred more than once."
+        correct: true
+        explanation: >-
+          `vocab_size` is a maximum. Once every remaining pair is unique,
+          another merge spends a vocabulary slot to shorten exactly one
+          position, which is not a trade worth making.
+      - text: "The corpus contained characters outside the byte range."
+        explanation: >-
+          Impossible: everything is bytes, and there are exactly 256 of them.
+      - text: "Duplicate merges were removed at the end."
+        explanation: >-
+          Merges cannot duplicate - each one is applied to the whole corpus
+          immediately, so the pair it replaced no longer exists anywhere.
+      - text: "The vocabulary was truncated to a power of two."
+        explanation: >-
+          Nothing in BPE rounds the vocabulary size. 819 is simply where the
+          corpus ran out of repeated pairs.
+
+  - id: q8
+    type: numeric
+    difficulty: medium
+    answer: 2.66
+    tolerance: 0.1
+    prompt: >-
+      The same seven records cost 201 tokens as a tab-separated table and 534
+      tokens as pretty-printed JSON. How many times more expensive is the JSON
+      form? (Two decimal places.)
+    explanation: >-
+      534 / 201 = 2.66. Measured per *character* JSON actually looks cheaper,
+      because its repeated English-like keys tokenize well - which is why the
+      comparison has to be made on identical information rather than on two
+      unrelated files.
+
+  - id: q9
+    type: single
+    difficulty: medium
+    prompt: >-
+      To save context you strip the spaces between words before sending a
+      prompt. What is the most likely effect?
+    options:
+      - text: "The token count goes up, because common words lose the leading space that made them single tokens."
+        correct: true
+        explanation: >-
+          " the" is one token; "the" glued to its neighbour is typically two or
+          more. You also hand the model an input unlike anything it saw in
+          training.
+      - text: "The token count drops by roughly one token per word."
+        explanation: >-
+          Spaces are not separate tokens in these vocabularies; they are
+          absorbed into the following word, so there is nothing to reclaim.
+      - text: "The token count is unchanged; whitespace is normalised away."
+        explanation: >-
+          Nothing is normalised away. Decoding has to reproduce the input
+          exactly, so every space is represented somewhere.
+      - text: "The token count drops and quality is unaffected."
+        explanation: >-
+          Both halves are wrong, which is what makes this such a popular
+          optimisation.
+
+  - id: q10
+    type: multi
+    difficulty: hard
+    prompt: >-
+      You truncate documents by slicing characters (`text[:2000]`) before
+      sending them. Which problems does that create?
+    options:
+      - text: "The cut can land mid-token, producing a final token the model never saw in training."
+        correct: true
+        explanation: >-
+          Truncating on a token boundary instead costs nothing: encode, slice
+          the ids, decode.
+      - text: "The number of tokens actually sent varies several-fold depending on the language."
+        correct: true
+        explanation: >-
+          2,000 characters is roughly 412 tokens of English and roughly 2,124
+          of Japanese under the same vocabulary. A character budget is not a
+          budget.
+      - text: "A multi-byte character can be split across the cut."
+        correct: true
+        explanation: >-
+          Slicing a Python `str` is safe, but the same slice applied after
+          encoding to bytes is not, and the bug reappears wherever the text
+          passes through a byte buffer.
+      - text: "Decoding the truncated text becomes impossible."
+        explanation: >-
+          It stays perfectly possible. The failure is quieter than that: valid
+          text, an unexpected token count, and no error anywhere.

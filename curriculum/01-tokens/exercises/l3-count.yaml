@@ -1,0 +1,92 @@
+id: tok-l3-count
+title: "Count what you actually send"
+lesson: modules/01-tokens/03-context-windows
+description: |
+  Each message arrives with the token count of its own text. What you send is
+  larger than the sum of those, for two reasons:
+
+  - every message is wrapped in role markers — `TEMPLATE_OVERHEAD` tokens each
+  - every request ends with a generation prompt opening the assistant's turn —
+    `GENERATION_PROMPT` tokens, once
+
+  Implement `prompt_tokens(messages)` and `fits(messages, context_limit,
+  reserved_output)`. The second is the one that decides whether a request is
+  sent at all, so it must account for the space the *answer* needs.
+
+setup_code: |
+  TEMPLATE_OVERHEAD = 4     # role markers around each message
+  GENERATION_PROMPT = 3     # the assistant's opening, on every request
+
+  def msg(role, tokens):
+      return {"role": role, "content": f"<{tokens} tokens of {role} text>",
+              "tokens": tokens}
+
+  CONVO = [msg("system", 24), msg("user", 40), msg("assistant", 60), msg("user", 30)]
+
+starter_code: |
+  def prompt_tokens(messages):
+      """Total tokens in the rendered request."""
+      return sum(m["tokens"] for m in messages)
+
+
+  def fits(messages, context_limit, reserved_output):
+      """True if this request can be sent AND leave room for the answer."""
+      return prompt_tokens(messages) <= context_limit
+
+
+  print("content only:", sum(m["tokens"] for m in CONVO))
+  print("actually sent:", prompt_tokens(CONVO))
+
+tests: |
+  # 24 + 40 + 60 + 30 = 154 tokens of content, four messages at 4 tokens of
+  # wrapper each, plus 3 for the generation prompt: 154 + 16 + 3 = 173.
+  assert prompt_tokens(CONVO) == 173, (
+      f"got {prompt_tokens(CONVO)}, expected 173. The content sums to 154; the "
+      "other 19 tokens are the four role-marker wrappers and the generation "
+      "prompt. Counting your text instead of the rendered template is a stable "
+      "under-estimate, and it is largest for conversations with many short "
+      "messages, because the wrapper is charged per message rather than per token."
+  )
+
+  # A single message still pays for the generation prompt.
+  assert prompt_tokens([msg("user", 10)]) == 10 + TEMPLATE_OVERHEAD + GENERATION_PROMPT
+
+  # An empty conversation is not free: the generation prompt is still sent.
+  assert prompt_tokens([]) == GENERATION_PROMPT, (
+      f"got {prompt_tokens([])}. Even with no messages the request ends with the "
+      "assistant's opening marker."
+  )
+
+  # The wrapper is per message, so splitting one message into four costs more
+  # even though the text is identical.
+  one_big = [msg("user", 100)]
+  four_small = [msg("user", 25) for _ in range(4)]
+  assert prompt_tokens(four_small) - prompt_tokens(one_big) == 3 * TEMPLATE_OVERHEAD
+
+  # fits() has to leave room for the answer.
+  assert fits(CONVO, context_limit=200, reserved_output=0) is True
+  assert fits(CONVO, context_limit=200, reserved_output=27) is True   # 173+27 == 200
+  assert fits(CONVO, context_limit=200, reserved_output=28) is False, (
+      "173 prompt tokens plus 28 reserved for the answer is 201, which does not "
+      "fit in 200. Input and output share the window - a prompt that exactly "
+      "fills it leaves nowhere for a reply."
+    )
+  assert fits([], context_limit=3, reserved_output=0) is True
+  assert fits([], context_limit=2, reserved_output=0) is False
+
+hints:
+  - "Two constants are defined in the setup and neither is used by the starter."
+  - "`prompt_tokens` adds TEMPLATE_OVERHEAD once per message, and GENERATION_PROMPT once for the whole request."
+  - "`fits` needs `reserved_output`: the check is `prompt_tokens(messages) + reserved_output <= context_limit`."
+
+solution: |
+  def prompt_tokens(messages):
+      return sum(m["tokens"] + TEMPLATE_OVERHEAD for m in messages) + GENERATION_PROMPT
+
+
+  def fits(messages, context_limit, reserved_output):
+      return prompt_tokens(messages) + reserved_output <= context_limit
+
+
+  print("content only:", sum(m["tokens"] for m in CONVO))
+  print("actually sent:", prompt_tokens(CONVO))

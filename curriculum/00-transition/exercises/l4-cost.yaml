@@ -1,0 +1,132 @@
+id: tr-l4-cost
+title: "Where the money actually goes"
+lesson: modules/00-transition/04-cost-and-latency
+description: |
+  A day of traffic, and a decision to make: you have been asked to cut spend
+  by trimming either the prompts or the answers. Which is worth more?
+
+  Work in **units of one input token** so no prices are needed:
+
+  ```
+  cost = in_tokens + out_tokens * price_ratio
+  ```
+
+  Return the share of *cost* attributable to each direction, and what a
+  proportional cut to each would save.
+
+setup_code: |
+  import random
+
+  def make_traffic(n=5000, seed=11):
+      """A retrieval-augmented workload: long prompts, short answers."""
+      rng = random.Random(seed)
+      out = []
+      for _ in range(n):
+          out.append({
+              "in_tokens": int(rng.lognormvariate(7.4, 0.55)),
+              "out_tokens": int(rng.lognormvariate(5.0, 0.45)),
+          })
+      return out
+
+  TRAFFIC = make_traffic()
+
+starter_code: |
+  def cost_report(records, price_ratio, cut=0.30):
+      """Return the four figures below, as fractions between 0 and 1.
+
+      input_share_of_cost   share of total COST from input tokens
+      output_share_of_cost  share of total COST from output tokens
+      saving_from_cutting_input   fraction of total cost saved by
+                                  removing `cut` of the input tokens
+      saving_from_cutting_output  the same, for output tokens
+      """
+      total_in = sum(r["in_tokens"] for r in records)
+      total_out = sum(r["out_tokens"] for r in records)
+      total = total_in + total_out
+      return {
+          "input_share_of_cost": total_in / total,
+          "output_share_of_cost": total_out / total,
+          "saving_from_cutting_input": cut * total_in / total,
+          "saving_from_cutting_output": cut * total_out / total,
+      }
+
+
+  r = cost_report(TRAFFIC, price_ratio=4.0)
+  for k, v in r.items():
+      print(f"{k:28} {v:6.1%}")
+
+tests: |
+  def close(a, b, tol=1e-9):
+      return abs(a - b) < tol
+
+  # A hand-checkable case: 100 in, 100 out, output costs 4x.
+  # Cost = 100 + 400 = 500, so input is 20% of cost and output 80% -
+  # even though the two token counts are identical.
+  tiny = [{"in_tokens": 100, "out_tokens": 100}]
+  r = cost_report(tiny, price_ratio=4.0)
+  assert close(r["input_share_of_cost"], 0.20), (
+      f"got {r['input_share_of_cost']:.3f}, expected 0.20. With equal token "
+      "counts and a 4x price ratio the shares cannot be equal - this is a "
+      "share of COST, so the output tokens have to be multiplied by the ratio "
+      "before anything is divided."
+  )
+  assert close(r["output_share_of_cost"], 0.80)
+  assert close(r["input_share_of_cost"] + r["output_share_of_cost"], 1.0)
+
+  # A price ratio of 1 is the only case where cost shares equal token shares.
+  r1 = cost_report(tiny, price_ratio=1.0)
+  assert close(r1["input_share_of_cost"], 0.50)
+
+  # Cutting 30% of a component saves 30% of that component's cost share.
+  r = cost_report(tiny, price_ratio=4.0, cut=0.30)
+  assert close(r["saving_from_cutting_input"], 0.06), f"got {r['saving_from_cutting_input']}"
+  assert close(r["saving_from_cutting_output"], 0.24)
+
+  # On realistic traffic, input is the overwhelming majority of TOKENS...
+  total_in = sum(x["in_tokens"] for x in TRAFFIC)
+  total_out = sum(x["out_tokens"] for x in TRAFFIC)
+  assert total_in / (total_in + total_out) > 0.85, "sanity check on the fixture"
+
+  # ...and, at a 4x ratio, still the majority of COST. Both facts are true at
+  # once, and only the second one decides which lever to pull.
+  r = cost_report(TRAFFIC, price_ratio=4.0)
+  assert r["input_share_of_cost"] > 0.70, (
+      f"input is only {r['input_share_of_cost']:.1%} of cost. For this traffic "
+      "shape it should be over 70% - prompts dominate the bill even though "
+      "output tokens are individually four times dearer."
+  )
+  assert r["saving_from_cutting_input"] > 2 * r["saving_from_cutting_output"], (
+      "cutting prompts should be worth more than twice cutting answers here"
+  )
+
+  # And the conclusion flips when the traffic shape flips.
+  chatty = [{"in_tokens": 50, "out_tokens": 800}] * 100
+  rc = cost_report(chatty, price_ratio=4.0)
+  assert rc["output_share_of_cost"] > 0.95, (
+      "for a workload that generates far more than it reads, output dominates - "
+      "which lever is bigger is a question about your traffic, not a general rule"
+  )
+
+hints:
+  - "Every figure here is a share of cost, and cost is not token count. The starter never uses `price_ratio` at all."
+  - "Compute `cost_in = total_in` and `cost_out = total_out * price_ratio`, then take shares of `cost_in + cost_out`."
+  - "The saving from cutting a component by `cut` is `cut` times that component's share of cost."
+
+solution: |
+  def cost_report(records, price_ratio, cut=0.30):
+      total_in = sum(r["in_tokens"] for r in records)
+      total_out = sum(r["out_tokens"] for r in records)
+      cost_in = total_in
+      cost_out = total_out * price_ratio
+      total = cost_in + cost_out
+      return {
+          "input_share_of_cost": cost_in / total,
+          "output_share_of_cost": cost_out / total,
+          "saving_from_cutting_input": cut * cost_in / total,
+          "saving_from_cutting_output": cut * cost_out / total,
+      }
+
+
+  r = cost_report(TRAFFIC, price_ratio=4.0)
+  for k, v in r.items():
+      print(f"{k:28} {v:6.1%}")

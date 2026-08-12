@@ -1,0 +1,124 @@
+id: tok-l2-penalty
+title: "The repetition penalty that encourages repetition"
+lesson: modules/01-tokens/02-sampling
+description: |
+  A repetition penalty is supposed to make an already-seen token less likely.
+  The usual implementation divides its logit by a factor greater than one.
+
+  Almost every logit in a real distribution is **negative**. Dividing −9 by
+  1.2 gives −7.5, which is *larger*. The token becomes more likely, and the
+  parameter does the opposite of its name for nearly every token it touches.
+
+  Implement the sign-aware form: divide when the score is positive, multiply
+  when it is negative. Both directions move the logit away from zero, which is
+  what "penalty" was supposed to mean.
+
+setup_code: |
+  import numpy as np
+
+  def softmax(logits):
+      """Turn a logit vector into probabilities, max-subtracted for stability.
+
+      Used here only to show what a penalty does to a token's probability.
+      """
+      z = np.asarray(logits, dtype=float)
+      z = z - z.max()
+      e = np.exp(z)
+      return e / e.sum()
+
+  # A realistic slice: one likely token, the rest well below it.
+  LOGITS = np.array([2.5, -1.0, -4.0, -9.0, 0.5])
+
+provided:
+  LOGITS:
+    summary: >-
+      Five raw logits for one position, before any softmax: one clearly likely
+      token at 2.5 and the rest below zero, which is what a real distribution
+      looks like.
+    notes:
+      - Index 3 is at −9.0, far enough down to make the sign bug obvious.
+
+starter_code: |
+  def repetition_penalty(logits, token, penalty):
+      """Return a NEW logit vector with `token` penalised."""
+      out = np.asarray(logits, dtype=float).copy()
+      out[token] = out[token] / penalty
+      return out
+
+
+  for i, name in [(0, "positive logit"), (3, "very negative logit")]:
+      before = softmax(LOGITS)[i]
+      after = softmax(repetition_penalty(LOGITS, i, 1.2))[i]
+      arrow = "down" if after < before else "UP"
+      print(f"{name:22} {before:.6f} -> {after:.6f}  ({arrow})")
+
+tests: |
+  def close(a, b, tol=1e-9):
+      return bool(np.all(np.abs(np.asarray(a) - np.asarray(b)) < tol))
+
+  # A penalty must reduce the probability of the token it is applied to.
+  # Every token, not just the likely ones.
+  for i in range(len(LOGITS)):
+      before = softmax(LOGITS)[i]
+      after = softmax(repetition_penalty(LOGITS, i, 1.2))[i]
+      assert after < before, (
+          f"token {i} has logit {LOGITS[i]}, and applying a penalty of 1.2 moved "
+          f"its probability from {before:.6f} to {after:.6f} - upwards. Dividing "
+          "a negative logit by a number greater than 1 moves it towards zero, "
+          "which makes the token MORE likely. Most logits are negative, so this "
+          "is the normal case rather than an edge case."
+      )
+
+  # The direction is the same for positive and negative logits: away from zero.
+  out = repetition_penalty(LOGITS, 0, 2.0)
+  assert close(out[0], 1.25), f"a positive logit 2.5 penalised by 2.0 should be 1.25, got {out[0]}"
+  out = repetition_penalty(LOGITS, 3, 2.0)
+  assert close(out[3], -18.0), (
+      f"a negative logit -9.0 penalised by 2.0 should be -18.0, got {out[3]}"
+  )
+
+  # A penalty of 1.0 is a no-op, whatever the sign.
+  for i in range(len(LOGITS)):
+      assert close(repetition_penalty(LOGITS, i, 1.0), LOGITS)
+
+  # Only the named token changes.
+  out = repetition_penalty(LOGITS, 2, 1.5)
+  untouched = [j for j in range(len(LOGITS)) if j != 2]
+  assert close(out[untouched], LOGITS[untouched]), "only the penalised token may change"
+
+  # The input array must not be modified.
+  before = LOGITS.copy()
+  repetition_penalty(LOGITS, 1, 1.5)
+  assert close(LOGITS, before), "repetition_penalty must return a new array"
+
+  # A stronger penalty must push further, in both regimes.
+  assert (softmax(repetition_penalty(LOGITS, 3, 2.0))[3]
+          < softmax(repetition_penalty(LOGITS, 3, 1.2))[3])
+  assert (softmax(repetition_penalty(LOGITS, 0, 2.0))[0]
+          < softmax(repetition_penalty(LOGITS, 0, 1.2))[0])
+
+  # Zero is the awkward case: it has no sign, and it should stay put.
+  z = np.array([0.0, 1.0, -1.0])
+  assert close(repetition_penalty(z, 0, 3.0)[0], 0.0), (
+      "a logit of exactly 0 has nothing to move away from; both branches leave "
+      "it at 0, so either is fine - but it must not become nan or inf"
+  )
+
+hints:
+  - "One line changes. The correct rule depends on the sign of the logit."
+  - "`score / penalty` shrinks a positive number towards zero — correct. For a negative score you need it to grow *more* negative."
+  - "`out[token] = score / penalty if score > 0 else score * penalty`."
+
+solution: |
+  def repetition_penalty(logits, token, penalty):
+      out = np.asarray(logits, dtype=float).copy()
+      score = out[token]
+      out[token] = score / penalty if score > 0 else score * penalty
+      return out
+
+
+  for i, name in [(0, "positive logit"), (3, "very negative logit")]:
+      before = softmax(LOGITS)[i]
+      after = softmax(repetition_penalty(LOGITS, i, 1.2))[i]
+      arrow = "down" if after < before else "UP"
+      print(f"{name:22} {before:.6f} -> {after:.6f}  ({arrow})")

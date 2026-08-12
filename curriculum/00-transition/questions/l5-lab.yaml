@@ -1,0 +1,195 @@
+id: tr-l5
+lesson: modules/00-transition/05-lab-demo-that-worked
+title: "0.5 - Lab: the demo that worked"
+questions:
+  - id: q1
+    type: numeric
+    difficulty: medium
+    answer: 90.25
+    tolerance: 0.3
+    prompt: >-
+      Healthy traffic succeeds 95% of the time. A slice that is 5% of traffic
+      fails every single request. What is the overall success rate? (Two
+      decimal places.)
+    explanation: >-
+      0.95 x 0.95 = 90.25%. Against a 90% dashboard floor the alert never
+      fires, no matter how completely that slice is broken - which is why no
+      threshold on the headline number can catch it.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      Below roughly what share of traffic can a completely dead slice never
+      breach a 90% floor, given 95% healthy?
+    options:
+      - text: "About 5.3% — the point where (p_h − F) / p_h equals the slice share."
+        correct: true
+        explanation: >-
+          (0.95 − 0.90) / 0.95 = 5.26%. Below that, the arithmetic guarantees
+          the aggregate stays above the floor even at zero success.
+      - text: "About 10%, since the floor is 10 points below perfect."
+        explanation: >-
+          The floor is 5 points below the healthy rate, not 10 below perfect,
+          and the division is by the healthy rate rather than by 1.
+      - text: "About 1%, since anything larger moves a percentage point."
+        explanation: >-
+          A 1% slice moves the aggregate by at most 0.95 points, so the
+          threshold is considerably higher than 1%.
+      - text: "There is no such share; any dead slice eventually breaches a floor."
+        explanation: >-
+          Not true for a fixed floor. The contribution of a slice is bounded
+          by its share, so a small enough slice cannot reach the floor at all.
+
+  - id: q3
+    type: single
+    difficulty: easy
+    prompt: >-
+      A log shows one in five requests with `in_tokens` of exactly 4096, and
+      those requests succeed far less often than the rest. What is the
+      diagnosis?
+    options:
+      - text: "Context truncation — a spike at one exact round number is a ceiling somebody imposed."
+        correct: true
+        explanation: >-
+          Natural text lengths are continuous. A hard edge at a power of two
+          is a cap, and the records sitting on it are the ones that were cut.
+      - text: "Version drift, since a subgroup is behaving differently."
+        explanation: >-
+          A subgroup behaving differently is the symptom of all four
+          signatures. The `in_tokens` spike identifies which stage.
+      - text: "A retry storm, since failures cluster."
+        explanation: >-
+          A retry storm shows up in the `attempts` field, not in input
+          lengths.
+      - text: "Sampling noise at a common input size."
+        explanation: >-
+          Twenty percent of traffic sharing one exact integer is not a
+          coincidence at any sample size.
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      A log shows both a drifting model version and a mean of 2.1 attempts per
+      request. Which do you report?
+    options:
+      - text: "The version drift — elevated attempts are usually downstream of the real fault."
+        correct: true
+        explanation: >-
+          Something broke and the client is faithfully retrying it. Fixing the
+          retry policy makes the symptom quieter and the outage longer.
+      - text: "The retry storm, because it is costing money right now."
+        explanation: >-
+          It is, and the spend stops when the cause is fixed. Treating the
+          amplifier as the fault leaves the fault in place.
+      - text: "Both, with equal weight."
+        explanation: >-
+          Reporting a cause and its own symptom as two findings sends two
+          teams after one bug.
+      - text: "Neither; a log with two signals is inconclusive."
+        explanation: >-
+          Two signals with a known causal direction between them is more
+          informative than one, not less.
+
+  - id: q5
+    type: multi
+    difficulty: medium
+    prompt: >-
+      Which keys are worth slicing an LLM run log by, that you would probably
+      not think of from a modelling background?
+    options:
+      - text: "Resolved model version."
+        correct: true
+        explanation: >-
+          It changes without a deploy on your side, so the slice you need may
+          not have existed yesterday.
+      - text: "Input-length band."
+        correct: true
+        explanation: >-
+          Where truncation hides. Nothing in ordinary subgroup analysis
+          suggests grouping by how long the input was.
+      - text: "Parameter signature."
+        correct: true
+        explanation: >-
+          Including the defaults you never set, which can change under you.
+      - text: "Row index in the log file."
+        explanation: >-
+          Not a property of the request. Time-ordering is worth looking at;
+          the index itself carries nothing.
+
+  - id: q6
+    type: single
+    difficulty: hard
+    prompt: >-
+      Once you slice, an outright break in a 10% slice is detected 99.5% of
+      the time even at n = 200. What does that imply about incidents that last
+      for weeks?
+    options:
+      - text: "They persist because nobody ran the group-by, not because the data was insufficient."
+        correct: true
+        explanation: >-
+          The highest-value change is therefore a scheduled slice-and-compare,
+          not a bigger evaluation set or a better metric.
+      - text: "The detection rule must be too sensitive to be usable in practice."
+        explanation: >-
+          Its false-alarm behaviour is governed by the interval overlap rule,
+          and non-overlapping 95% intervals are a conservative bar.
+      - text: "Larger samples would have caught them sooner."
+        explanation: >-
+          Twenty items in the slice already suffice for an outright break.
+          More data does not address a query nobody ran.
+      - text: "The aggregate would also have caught them at that sample size."
+        explanation: >-
+          The aggregate never catches them at any sample size - that is the
+          masking arithmetic, and it does not depend on n.
+
+  - id: q7
+    type: single
+    difficulty: hard
+    prompt: >-
+      A mild degradation — a slice at 80% against 95% healthy — is caught 41%
+      of the time at n = 200 and 80% at n = 500. What kind of problem is this?
+    options:
+      - text: "A power problem, identical to lesson 0.3's: the fix is volume or a longer window."
+        correct: true
+        explanation: >-
+          Unlike an outright break, drift genuinely needs sample size. Slicing
+          is necessary and not sufficient here.
+      - text: "A masking problem, fixed by lowering the dashboard floor."
+        explanation: >-
+          Lowering the floor makes the aggregate fire more often on
+          everything, which is noise rather than detection.
+      - text: "A logging problem."
+        explanation: >-
+          The data is present and correctly sliced; there is simply not enough
+          of it in that slice yet.
+      - text: "It is not a problem — 41% detection is acceptable for a mild issue."
+        explanation: >-
+          41% is a coin flip, and reporting it as monitoring implies a
+          guarantee that does not exist.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      You sweep ten slicing keys and one comes back significant at p < 0.05.
+      How should you treat it?
+    options:
+      - text: "As a hypothesis to confirm on fresh traffic — ten tests at 5% give roughly a 40% chance of at least one false alarm."
+        correct: true
+        explanation: >-
+          Slicing is a search. This is why the four signatures, each with a
+          mechanism attached, are worth more than an exhaustive sweep.
+      - text: "As a finding, since the threshold was met."
+        explanation: >-
+          The threshold was met once out of ten attempts, which is roughly
+          what chance predicts.
+      - text: "As noise, since multiple comparisons invalidate it."
+        explanation: >-
+          Too strong in the other direction. It may well be real; it is simply
+          not yet established.
+      - text: "Apply Bonferroni and discard it if it fails."
+        explanation: >-
+          A reasonable correction, and still weaker than confirming on data
+          you have not already looked at.

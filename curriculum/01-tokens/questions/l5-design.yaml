@@ -1,0 +1,193 @@
+id: tok-l5
+lesson: modules/01-tokens/05-costing-a-design
+title: "1.5 - Costing a design"
+questions:
+  - id: q1
+    type: single
+    difficulty: medium
+    prompt: >-
+      Which design's cost per query does **not** grow with the size of the
+      corpus?
+    options:
+      - text: "Retrieval — it looks at k chunks regardless of how many exist."
+        correct: true
+        explanation: >-
+          That flatness is structural rather than a tuning result, and it is
+          the entire argument for retrieval. Whether the k chunks are the
+          right ones is a separate question this model cannot answer.
+      - text: "Long context, once prompt caching is enabled."
+        explanation: >-
+          Caching reduces the cost of the repeated prefix; the prefix still
+          grows with the corpus.
+      - text: "Map-reduce, because the map calls are parallel."
+        explanation: >-
+          Parallelism affects latency, not cost. Map-reduce grows fastest of
+          the three.
+      - text: "All three, at large enough N."
+        explanation: >-
+          Two of them are linear in N and one is flat, which is the whole
+          comparison.
+
+  - id: q2
+    type: single
+    difficulty: hard
+    prompt: >-
+      Map-reduce costs more than long context at N=1000 even though each of
+      its calls is far smaller. What is the dominant extra term?
+    options:
+      - text: "The system prompt, re-sent once per chunk — an `N·s` term the other designs do not have."
+        correct: true
+        explanation: >-
+          Per-call overhead multiplied by the number of calls. It is invisible
+          if you reason about "total corpus tokens" and it is the largest
+          surprise in the model.
+      - text: "The summaries, which are priced at the output rate."
+        explanation: >-
+          A real term and a smaller one; the summaries are 60 tokens per chunk
+          against 145 tokens of instructions.
+      - text: "The reduce call, which sees everything."
+        explanation: >-
+          The reduce call reads summaries, not chunks, so it is much smaller
+          than a long-context prompt.
+      - text: "Retry overhead from making N calls instead of one."
+        explanation: >-
+          Retries are not in this model at all, though N calls do give N
+          chances to fail.
+
+  - id: q3
+    type: numeric
+    difficulty: medium
+    answer: 119.9
+    tolerance: 5
+    prompt: >-
+      In this lesson's model, how many times more does long context cost than
+      retrieval at N=1000? (One decimal place.)
+    explanation: >-
+      119.9x. At N=100 it is 12.2x. The ratio grows linearly in N because one
+      design scales with the corpus and the other does not.
+
+  - id: q4
+    type: single
+    difficulty: medium
+    prompt: >-
+      Which constraint should you check first when sketching a design, and
+      why?
+    options:
+      - text: "Feasibility — it is binary, free to check, and cannot be bought out of."
+        correct: true
+        explanation: >-
+          A design that does not fit the window is not an expensive design, it
+          is not a design. Cost and latency are trade-offs you can negotiate;
+          the ceiling is not.
+      - text: "Cost, because it determines whether the project is approved."
+        explanation: >-
+          Costing an infeasible design is wasted work, and it is the more
+          expensive check of the two.
+      - text: "Latency, because users notice it first."
+        explanation: >-
+          Users notice it in a system that exists. Feasibility decides whether
+          it can.
+      - text: "Quality, because nothing else matters if it does not work."
+        explanation: >-
+          Quality matters most and takes longest to measure. Ruling out the
+          impossible first is what makes the quality work affordable.
+
+  - id: q5
+    type: multi
+    difficulty: hard
+    prompt: >-
+      The cost table shows retrieval winning on every number. Which
+      conclusions are legitimate?
+    options:
+      - text: "Retrieval is the only design whose cost does not grow with the corpus."
+        correct: true
+        explanation: >-
+          A statement about the model, fully supported by it.
+      - text: "If retrieval can be made to work, it is the one to make work."
+        correct: true
+        explanation: >-
+          A conditional recommendation, and the honest form of the conclusion.
+      - text: "Retrieval is the right architecture for this task."
+        explanation: >-
+          Unsupported. The model has no quality axis, and retrieval is cheap
+          precisely because it looks at 6 chunks instead of 1,000.
+      - text: "Long context should be ruled out at N=1000."
+        correct: true
+        explanation: >-
+          On feasibility rather than cost: past 249 chunks it no longer fits
+          the window in this model, so at N=1000 it is not an option.
+
+  - id: q6
+    type: single
+    difficulty: hard
+    prompt: >-
+      Map-reduce needs 59 concurrent calls to match long context's latency at
+      N=1000. What kind of constraint is that?
+    options:
+      - text: "A rate-limit question, owned by the provider, not a design decision you can make alone."
+        correct: true
+        explanation: >-
+          Concurrency is the one knob that trades money for time here, and how
+          far you can turn it is set by somebody else's bucket - lesson 1.4.
+      - text: "A hardware question about your own servers."
+        explanation: >-
+          The work happens on the provider's side; your concurrency is capped
+          by their limits long before yours.
+      - text: "A cost question, since more concurrency costs more."
+        explanation: >-
+          Total cost is unchanged by concurrency; the same calls are made
+          either way.
+      - text: "It is not a constraint — concurrency is free to increase."
+        explanation: >-
+          It is free right up until the rate limit, at which point it stops
+          entirely.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why does this lesson express cost in "input-token units" rather than
+      currency?
+    options:
+      - text: "Ratios and crossovers survive a price change; absolute prices do not."
+        correct: true
+        explanation: >-
+          The same reasoning as lesson 0.4. The conclusion "long context costs
+          120x retrieval at N=1000" stays true through a repricing; a figure
+          in dollars does not.
+      - text: "Because providers do not publish per-token prices."
+        explanation: >-
+          They publish them prominently; they also change them.
+      - text: "Because token counts are more precise than currency."
+        explanation: >-
+          Both are exact. Only one goes stale.
+      - text: "To avoid committing to a specific provider."
+        explanation: >-
+          A side benefit, and not the reason - the model works for any single
+          provider too.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      A design document contains this cost model with your parameters filled
+      in. What should be re-derived later, and when?
+    options:
+      - text: "All of it, once chunk size, summary length and answer length are known from the real build."
+        correct: true
+        explanation: >-
+          Those three parameters drift during implementation, and each one
+          moves the crossovers. The model is cheap to re-run and stale by
+          default.
+      - text: "Nothing — the shapes do not change."
+        explanation: >-
+          The shapes do not, and the crossover points do, which is what the
+          decision actually turns on.
+      - text: "Only the price ratio."
+        explanation: >-
+          The price ratio is the most stable parameter in the model, not the
+          least.
+      - text: "Only if the corpus size changes."
+        explanation: >-
+          N is the parameter you are most likely to have estimated correctly;
+          the token lengths are the ones that move.

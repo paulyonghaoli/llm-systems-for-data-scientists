@@ -1,0 +1,95 @@
+{
+  "recorded_on": "2026-08-09",
+  "tiktoken_version": "0.13.0",
+  "note": "Token counts for the held-out samples in data/samples/, from real production tokenizers. Regenerate with experiments/record_tiktoken.py; never called at test time.",
+  "encodings": {
+    "cl100k_base": {
+      "n_vocab": 100277,
+      "counts": {
+        "english": 194,
+        "japanese": 272,
+        "json": 245,
+        "numbers": 201,
+        "numbers_json": 534,
+        "python": 265
+      },
+      "chat": {
+        "turns": 8,
+        "roles": [
+          "system",
+          "user",
+          "assistant",
+          "user",
+          "assistant",
+          "user",
+          "assistant",
+          "user"
+        ],
+        "wrapped_tokens": [
+          51,
+          87,
+          132,
+          154,
+          201,
+          225,
+          271,
+          303
+        ],
+        "bare_tokens": [
+          30,
+          52,
+          84,
+          93,
+          126,
+          136,
+          169,
+          188
+        ]
+      }
+    },
+    "o200k_base": {
+      "n_vocab": 200019,
+      "counts": {
+        "english": 194,
+        "japanese": 202,
+        "json": 244,
+        "numbers": 201,
+        "numbers_json": 534,
+        "python": 265
+      },
+      "chat": {
+        "turns": 8,
+        "roles": [
+          "system",
+          "user",
+          "assistant",
+          "user",
+          "assistant",
+          "user",
+          "assistant",
+          "user"
+        ],
+        "wrapped_tokens": [
+          51,
+          87,
+          132,
+          154,
+          201,
+          225,
+          271,
+          303
+        ],
+        "bare_tokens": [
+          30,
+          52,
+          84,
+          93,
+          126,
+          136,
+          169,
+          188
+        ]
+      }
+    }
+  }
+}

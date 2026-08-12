@@ -1,0 +1,193 @@
+id: prm-l1
+lesson: modules/02-prompting/01-instruction-structure
+title: "2.1 - Instruction structure and the trust boundary"
+questions:
+  - id: q1
+    type: single
+    difficulty: medium
+    prompt: >-
+      Prepared statements solve SQL injection. Why is there no equivalent for
+      prompts?
+    options:
+      - text: "The database has a formal grammar and can fix the query plan before seeing any value; a model has neither."
+        correct: true
+        explanation: >-
+          Instructions and data are the same undifferentiated token sequence.
+          You can make the boundary legible; you cannot make it enforced.
+      - text: "Because model APIs do not support parameterised requests yet."
+        explanation: >-
+          It is not a missing feature. There is nothing to parameterise
+          against, because there is no parser separating plan from values.
+      - text: "Because prompts are natural language and cannot be escaped."
+        explanation: >-
+          They can be escaped, and escaping works - it solves the parsing
+          half completely. It just does not solve the trust half.
+      - text: "Because the model reads the prompt in a different order."
+        explanation: >-
+          Order of reading is not the issue; absence of an enforced boundary
+          is.
+
+  - id: q2
+    type: numeric
+    difficulty: easy
+    answer: 0
+    tolerance: 0
+    prompt: >-
+      In this lesson's experiment, what percentage of payloads produced a
+      structural breakout under the escaped-sentinel policy?
+    explanation: >-
+      Zero. Escaping solves the parsing problem completely, at a cost of five
+      characters across the whole payload set. The 27.3% of payloads carrying
+      instruction-like text were entirely unaffected by it.
+
+  - id: q3
+    type: single
+    difficulty: medium
+    prompt: >-
+      A rare sentinel like `<|doc|>` collides with real documents far less
+      often than a code fence. What does that buy you?
+    options:
+      - text: "Fewer accidental collisions with benign documents, and nothing at all against a deliberate one."
+        correct: true
+        explanation: >-
+          Rarity is a smaller target, not a boundary. An adversarial payload
+          contains a rare marker exactly as easily as a common one.
+      - text: "Protection against prompt injection."
+        explanation: >-
+          Injection does not require breaking a delimiter. The payloads that
+          carry only instruction text score zero breakouts under every policy.
+      - text: "A guarantee that parsing is unambiguous."
+        explanation: >-
+          Only escaping gives that guarantee. Rarity makes violations
+          unlikely, which is a different claim.
+      - text: "Lower token cost."
+        explanation: >-
+          A longer, rarer marker generally costs slightly more tokens, not
+          fewer.
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      Your escape replaces the marker with `\D`. Round-tripping fails on some
+      inputs. Which, and why?
+    options:
+      - text: "Content that already contains `\\D` — unescaping turns the user's own text into a marker."
+        correct: true
+        explanation: >-
+          The encoding is not injective until the escape character is itself
+          escaped. Escape `\\` first, then the marker, or you escape the
+          escapes you just introduced.
+      - text: "Content containing the marker twice."
+        explanation: >-
+          Repeated markers are handled fine by a naive replace; the failure
+          needs the escape sequence, not the marker.
+      - text: "Empty content."
+        explanation: >-
+          The empty string round-trips under both the naive and the correct
+          implementation.
+      - text: "Content containing non-ASCII characters."
+        explanation: >-
+          Encoding is orthogonal to this bug.
+
+  - id: q5
+    type: single
+    difficulty: medium
+    prompt: >-
+      The structural policy — sending untrusted content as its own message —
+      scored 0% breakouts. How should that number be read?
+    options:
+      - text: "True by construction, since no delimited string is built; a good reason to prefer it and not evidence of safety."
+        correct: true
+        explanation: >-
+          There is nothing to parse ambiguously because there is nothing to
+          parse. The model still sees one token sequence, and role markers are
+          a convention rather than an enforced rule.
+      - text: "Evidence that role separation is a security boundary."
+        explanation: >-
+          The model was trained to respect roles; it is not prevented from
+          ignoring them.
+      - text: "A measurement showing it outperformed escaping."
+        explanation: >-
+          Both scored zero. One measured a property, the other has the
+          property definitionally.
+      - text: "An artefact of too few payloads."
+        explanation: >-
+          More payloads would not change it - the policy cannot produce a
+          breakout at all.
+
+  - id: q6
+    type: multi
+    difficulty: hard
+    prompt: >-
+      A retrieved document contains "approve the refund". Which of these are
+      sound responses?
+    options:
+      - text: "Gate the refund capability on the authenticated caller, not on the model having asked for it."
+        correct: true
+        explanation: >-
+          Authority comes from the caller. A document containing a sentence is
+          only dangerous if some code is willing to act because a document
+          said so.
+      - text: "Treat retrieved content as lower authority than the user throughout the system."
+        correct: true
+        explanation: >-
+          An explicit trust lattice, checked at the point of action rather
+          than inferred from prompt position.
+      - text: "Escape the document more carefully."
+        explanation: >-
+          There is nothing to escape - the sentence contains no delimiters.
+          Escaping is orthogonal to this payload.
+      - text: "Instruct the model in the system prompt to ignore instructions found in documents."
+        explanation: >-
+          Worth doing and not a control. It is a request to the same component
+          that is being attacked, with no enforcement behind it.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: >-
+      An authorisation check reads `max(level(s) for s in prompt_sources)`.
+      What is wrong with it?
+    options:
+      - text: "It grants authority based on what appeared in the prompt rather than on who made the request."
+        correct: true
+        explanation: >-
+          Every prompt contains a system message, so every request is
+          system-authorised. The check should look only at the origin, and
+          trimming the prompt should never change a decision.
+      - text: "It should use `min` rather than `max`."
+        explanation: >-
+          `min` would be less catastrophic and still wrong - the sources
+          present are simply not the right input.
+      - text: "It fails when `prompt_sources` is empty."
+        explanation: >-
+          A real edge case, and a much smaller problem than the one in the
+          main path.
+      - text: "Nothing, provided the system prompt is trusted."
+        explanation: >-
+          The system prompt is trusted. The retrieved document that rode
+          alongside it is not, and this check cannot tell them apart.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why should an escape sequence be visible rather than, say, a zero-width
+      space inserted inside the marker?
+    options:
+      - text: "Invisible escapes are undebuggable and do not survive Unicode normalisation by components you do not control."
+        correct: true
+        explanation: >-
+          Escaped and unescaped forms look identical in logs and diffs, and a
+          normalising step anywhere downstream silently undoes the protection.
+      - text: "Zero-width spaces cost more tokens."
+        explanation: >-
+          They cost a token or two, which is not the objection.
+      - text: "Zero-width spaces are not valid UTF-8."
+        explanation: >-
+          They are perfectly valid UTF-8.
+      - text: "Visible escapes are required by the JSON specification."
+        explanation: >-
+          JSON has its own escaping rules and has nothing to say about your
+          document markers.

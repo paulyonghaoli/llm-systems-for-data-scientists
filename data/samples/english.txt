@@ -1,0 +1,14 @@
+The reviewer asked a fair question about the experiment: how many runs were
+needed before the difference between the two configurations could be called
+real rather than noise? The honest answer was that nobody had checked. The
+first configuration had been measured once, the second had been measured once,
+and the gap between them had been reported as a finding. When the runs were
+repeated with different random seeds the gap moved around considerably, and on
+four of the twenty seeds it pointed the other way entirely.
+
+This is an ordinary failure and it is worth being unembarrassed about it. A
+single measurement of a stochastic system is a sample, not a result. The
+correction is not clever statistics; it is more runs, a stated interval, and a
+willingness to say that the effect could not be distinguished from zero at the
+sample size available. That last sentence is much more useful to a reader than
+a number presented without one.

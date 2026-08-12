@@ -1,0 +1,26 @@
+.venv/
+site/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Wrangler's local cache. Holds the Cloudflare account id and name — not a
+# credential, and not ours to publish either.
+.wrangler/
+
+# Quiz and exercise JSON is generated from curriculum/*.yaml at build time by
+# tools/mkdocs_hooks.py, so it is derived rather than source.
+#
+# Note the trailing `/*`: git cannot re-include a path whose parent directory
+# is excluded, so `docs/assets/generated/` followed by a `!` negation silently
+# ignores the figures too. Excluding the *contents* is what makes the negation
+# below work — and without it a fresh clone has no committed SVGs and fails
+# gate 22 on the first run.
+docs/assets/generated/*
+
+# Figures are generated as well, but by hand-run tools/figures.py rather than
+# at build time, so they are committed and gate 22 diffs them against a fresh
+# render.
+!docs/assets/generated/figures/

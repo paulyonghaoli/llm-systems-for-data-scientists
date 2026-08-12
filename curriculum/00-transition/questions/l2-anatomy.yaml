@@ -1,0 +1,188 @@
+id: tr-l2
+lesson: modules/00-transition/02-anatomy
+title: "0.2 - Anatomy"
+questions:
+  - id: q1
+    type: numeric
+    difficulty: easy
+    answer: 93.2
+    tolerance: 0.5
+    prompt: >-
+      Seven stages in series, each succeeding 99% of the time and failing
+      independently. What percentage of requests survive all seven? (One
+      decimal place.)
+    explanation: >-
+      0.99 to the seventh power is 0.932. Serial reliability multiplies, so
+      "99% everywhere" is a 6.8% end-to-end failure rate - roughly one request
+      in fifteen.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      All seven stages sit at 99%. You can make exactly one of them perfect.
+      What is the best available improvement?
+    options:
+      - text: "About one point, from 93.2% to 94.1%."
+        correct: true
+        explanation: >-
+          You go from 0.99^7 to 0.99^6. Serial reliability rewards lifting the
+          worst stage, and rewards *removing* a stage most of all - the option
+          that rarely appears on the list.
+      - text: "About seven points, since one stage is a seventh of the pipeline."
+        explanation: >-
+          Reliability multiplies rather than adding, so a stage's contribution
+          is not a share of the total.
+      - text: "Nothing measurable; 99% is already within noise."
+        explanation: >-
+          A point of end-to-end success rate is very measurable at any
+          reasonable traffic volume.
+      - text: "It depends on which stage, and cannot be determined."
+        explanation: >-
+          When every stage has the same rate, it does not depend on which one.
+          It would if the rates differed - which is the actual lesson.
+
+  - id: q3
+    type: single
+    difficulty: medium
+    prompt: >-
+      Retrieval returns zero documents and the pipeline continues. What does
+      the user see?
+    options:
+      - text: "A confident answer drawn from the model's own memory, indistinguishable from a grounded one."
+        correct: true
+        explanation: >-
+          This is the characteristic LLM failure: nothing raises, and the
+          output looks exactly like success. It is why validation is a stage
+          and why groundedness has to be measured rather than assumed.
+      - text: "An error, because the prompt template will fail to render."
+        explanation: >-
+          An empty list renders perfectly well into a template. That is the
+          problem.
+      - text: "A refusal, because the model has nothing to work from."
+        explanation: >-
+          Sometimes, and you cannot rely on it. Models are generally more
+          willing to answer than they should be.
+      - text: "A timeout."
+        explanation: >-
+          Retrieval returning nothing is fast. Speed is part of why it goes
+          unnoticed.
+
+  - id: q4
+    type: multi
+    difficulty: medium
+    prompt: "Which of these are genuine hazards of an automatic retry policy?"
+    options:
+      - text: "During a provider outage, retries increase the load that caused the outage."
+        correct: true
+        explanation: >-
+          Retry amplification turns a partial outage into a total one. Backoff
+          and a circuit breaker exist for this.
+      - text: "If the call had a side effect, the retry performs it twice."
+        correct: true
+        explanation: >-
+          Retrying a non-idempotent operation is the classic distributed
+          systems error; idempotency keys are the standard answer.
+      - text: "Every failed attempt is still billed."
+        correct: true
+        explanation: >-
+          The provider read your input before failing. Retry cost is real
+          spend, not just latency.
+      - text: "Retries raise the cost of each successful request as the limit rises."
+        explanation: >-
+          They do not. Cost per success is 1/(1-f) and the limit cancels out -
+          lesson 0.1 §G.
+
+  - id: q5
+    type: single
+    difficulty: hard
+    prompt: >-
+      Why is checking the token budget *after* a call substantially different
+      from checking it before?
+    options:
+      - text: "Afterwards you are reporting an overrun you have already paid for."
+        correct: true
+        explanation: >-
+          A budget check is a control, not a metric. Once the request is sent
+          the money is spent, and the only thing left to decide is whether to
+          send the next one.
+      - text: "The token count is not available until after the call."
+        explanation: >-
+          An estimate is available before, and an estimate is what a budget
+          guard needs. Exactness is the wrong goal for a control.
+      - text: "There is no practical difference for a single request."
+        explanation: >-
+          There is for exactly the request that would have blown the budget,
+          which is the one the control exists for.
+      - text: "It breaks retry accounting."
+        explanation: >-
+          It can, but the primary problem is simpler: the guard does not
+          guard anything.
+
+  - id: q6
+    type: single
+    difficulty: medium
+    prompt: >-
+      `json.loads` succeeded on the model's output. What have you established?
+    options:
+      - text: "That it is syntactically JSON, and nothing about whether it is the object you asked for."
+        correct: true
+        explanation: >-
+          Missing keys, wrong types and invented fields all parse perfectly.
+          Conformance is a separate check from parsing.
+      - text: "That the schema was satisfied."
+        explanation: >-
+          `json.loads` has never seen your schema.
+      - text: "That the model followed the instructions."
+        explanation: >-
+          It followed the formatting instruction, which is the easiest one.
+      - text: "That the output is safe to pass downstream."
+        explanation: >-
+          Only if downstream tolerates absent keys and arbitrary types, which
+          is rarely true and never documented.
+
+  - id: q7
+    type: single
+    difficulty: hard
+    prompt: >-
+      In Python, why does a naive `isinstance(value, (int, float))` check let
+      through values you did not intend?
+    options:
+      - text: "`bool` is a subclass of `int`, so `True` passes any numeric check."
+        correct: true
+        explanation: >-
+          `isinstance(True, int)` is True. A model that returns `true` where a
+          confidence score belongs will sail through validation and compare
+          as 1 against your threshold.
+      - text: "`float` accepts strings that look like numbers."
+        explanation: >-
+          It does not; `isinstance("0.8", float)` is False. Only the
+          constructor `float("0.8")` converts.
+      - text: "`isinstance` ignores the second argument when it is a tuple."
+        explanation: >-
+          A tuple means "any of these", and it works as expected.
+      - text: "JSON numbers are always decoded as `Decimal`."
+        explanation: >-
+          Python's `json` decodes to `int` and `float` by default.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: "What is wrong with a fallback that silently returns a degraded answer?"
+    options:
+      - text: "Users cannot tell it apart from a normal answer, and neither can your metrics."
+        correct: true
+        explanation: >-
+          It trains people to trust something they should not, and it removes
+          the signal you would have used to discover how often the primary
+          path fails.
+      - text: "It is slower than returning an error."
+        explanation: >-
+          Usually faster, which is part of the appeal.
+      - text: "It violates the retry policy."
+        explanation: >-
+          Fallback and retry are different stages solving different problems.
+      - text: "Nothing - graceful degradation is best practice."
+        explanation: >-
+          Graceful degradation is best practice; *silent* degradation is not.
+          The distinction is whether the caller can tell.

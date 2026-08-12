@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llmlab"
+version = "0.1.0"
+description = "LLM Systems for Data Scientists — the executable core of the curriculum"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pyyaml>=6.0",
+    "pytest>=8.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+docs = [
+    "mkdocs-material>=9.5",
+    "matplotlib>=3.8",
+]
+# Only ever installed by hand, to re-record pinned fixtures. Never in CI:
+# gate 13 runs the whole suite with the network switched off.
+record = [
+    "tiktoken>=0.7",
+]
+
+[tool.setuptools.packages.find]
+include = ["llmlab*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [".venv", "site"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

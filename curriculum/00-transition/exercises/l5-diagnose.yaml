@@ -1,0 +1,175 @@
+id: tr-l5-diagnose
+title: "Name the fault"
+lesson: modules/00-transition/05-lab-demo-that-worked
+description: |
+  Four incidents, one root cause each, and a log. Write the runbook as code.
+
+  `diagnose(records)` returns the **first** label whose signature matches,
+  checking in this order, or `"healthy"`:
+
+  | | Label | Fires when |
+  |---|---|---|
+  | 1 | `version_drift` | two or more `model_version` values each with **≥ 20** records, and the gap between the best and worst version's success rate is **≥ 0.15** |
+  | 2 | `context_truncation` | the most common single `in_tokens` value covers **≥ 15%** of records, and those records succeed at a rate **≥ 0.15** below the rest |
+  | 3 | `retry_storm` | mean `attempts` per record is **≥ 1.5** |
+  | 4 | `silent_refusal` | the fraction of records with `outcome == "refused"` is **≥ 0.15** |
+
+  Success means `outcome == "ok"`. A refusal is not a success.
+
+  Every threshold is published so that the answer is determinate; the part
+  worth thinking about is *why each signature identifies the stage it does*.
+
+setup_code: |
+  import random
+  from collections import Counter
+
+  CAP = 4096
+  VERSIONS = ("m-2026-03-01", "m-2026-08-01")
+  CAUSES = ("healthy", "version_drift", "context_truncation",
+            "retry_storm", "silent_refusal")
+
+  def _record(rng, version, ok_p, in_tokens, attempts, refuse_p):
+      if rng.random() < refuse_p:
+          outcome = "refused"
+      elif rng.random() < ok_p:
+          outcome = "ok"
+      else:
+          outcome = "error"
+      return {
+          "model_version": version,
+          "in_tokens": in_tokens,
+          "attempts": attempts,
+          "outcome": outcome,
+      }
+
+  def make_incident(seed, cause, n=500):
+      """One seeded log with exactly one root cause planted in it."""
+      rng = random.Random(seed * 977 + CAUSES.index(cause))
+      records = []
+      for _ in range(n):
+          version, ok_p, attempts, refuse_p = VERSIONS[0], 0.95, 1, 0.01
+          in_tokens = int(rng.lognormvariate(7.3, 0.5))
+
+          if cause == "version_drift" and rng.random() < 0.06:
+              version, ok_p = VERSIONS[1], 0.40
+          elif cause == "context_truncation" and rng.random() < 0.20:
+              in_tokens, ok_p = CAP, 0.55
+          elif cause == "retry_storm":
+              attempts = rng.choice([1, 2, 3])
+          elif cause == "silent_refusal":
+              refuse_p = 0.25
+
+          records.append(_record(rng, version, ok_p, in_tokens, attempts, refuse_p))
+      return records
+
+  def rate(records):
+      """Fraction of records whose outcome is "ok". A refusal is not a success.
+      Returns 0.0 for an empty list rather than raising."""
+      return sum(1 for r in records if r["outcome"] == "ok") / len(records) if records else 0.0
+
+starter_code: |
+  def diagnose(records):
+      """Return the first matching label, or 'healthy'."""
+      if not records:
+          return "healthy"
+
+      mean_attempts = sum(r["attempts"] for r in records) / len(records)
+      if mean_attempts >= 1.5:
+          return "retry_storm"
+
+      refused = sum(1 for r in records if r["outcome"] == "refused") / len(records)
+      if refused >= 0.15:
+          return "silent_refusal"
+
+      return "healthy"
+
+
+  for cause in CAUSES:
+      log = make_incident(1, cause)
+      print(f"{cause:20} overall {rate(log):6.1%}  ->  diagnosed {diagnose(log)!r}")
+
+tests: |
+  for cause in CAUSES:
+      for seed in range(1, 9):
+          log = make_incident(seed, cause)
+          got = diagnose(log)
+          if cause == "version_drift" and got != cause:
+              raise AssertionError(
+                  f"seed {seed}: a log where one model version fails most of the "
+                  f"time was diagnosed as {got!r}. Its overall success rate is "
+                  f"{rate(log):.1%} - high enough that no aggregate check will "
+                  "ever fire. Group by model_version and compare the groups."
+              )
+          if cause == "context_truncation" and got != cause:
+              raise AssertionError(
+                  f"seed {seed}: diagnosed {got!r}. One in five requests has an "
+                  f"in_tokens value of exactly {CAP} - a spike at a single round "
+                  "number is a ceiling, not a coincidence, and those requests do "
+                  "much worse than the rest."
+              )
+          assert got == cause, f"seed {seed}, planted {cause!r}, diagnosed {got!r}"
+
+  # Priority order is part of the specification: a log with both a drifting
+  # version and a retry storm reports the version.
+  mixed = make_incident(3, "version_drift")
+  for r in mixed:
+      r["attempts"] = 2
+  assert diagnose(mixed) == "version_drift", (
+      "when two signatures match, report the earlier rule - the retry storm is "
+      "downstream of whatever is actually broken"
+  )
+
+  # A healthy log must stay healthy under a mode that is merely common.
+  boring = make_incident(2, "healthy")
+  for r in boring[:60]:
+      r["in_tokens"] = 1234           # 12% of records, below the 15% threshold
+  assert diagnose(boring) == "healthy", (
+      "12% of records sharing an in_tokens value is under the 15% threshold, and "
+      "those records are not failing either - a signature needs both halves"
+  )
+
+  assert diagnose([]) == "healthy", "an empty log has nothing wrong with it"
+
+hints:
+  - "Two of the four checks are already there. The missing two both need grouping, not a single aggregate."
+  - "For version_drift: group by `model_version`, drop groups with fewer than 20 records, then compare the highest and lowest group success rates."
+  - "For context_truncation: `Counter(r['in_tokens'] for r in records).most_common(1)` gives the mode and its count. Compare that group's success rate with everything else's."
+
+solution: |
+  def diagnose(records):
+      if not records:
+          return "healthy"
+      n = len(records)
+
+      # 1. Different model versions performing differently.
+      by_version = {}
+      for r in records:
+          by_version.setdefault(r["model_version"], []).append(r)
+      big = [rows for rows in by_version.values() if len(rows) >= 20]
+      if len(big) >= 2:
+          rates = [rate(rows) for rows in big]
+          if max(rates) - min(rates) >= 0.15:
+              return "version_drift"
+
+      # 2. A spike at one input length is a ceiling.
+      mode, count = Counter(r["in_tokens"] for r in records).most_common(1)[0]
+      if count >= 0.15 * n:
+          at_cap = [r for r in records if r["in_tokens"] == mode]
+          rest = [r for r in records if r["in_tokens"] != mode]
+          if rest and rate(rest) - rate(at_cap) >= 0.15:
+              return "context_truncation"
+
+      # 3. Attempts above one mean the call stage is failing and retrying.
+      if sum(r["attempts"] for r in records) / n >= 1.5:
+          return "retry_storm"
+
+      # 4. Refusals are answers the user did not get.
+      if sum(1 for r in records if r["outcome"] == "refused") / n >= 0.15:
+          return "silent_refusal"
+
+      return "healthy"
+
+
+  for cause in CAUSES:
+      log = make_incident(1, cause)
+      print(f"{cause:20} overall {rate(log):6.1%}  ->  diagnosed {diagnose(log)!r}")

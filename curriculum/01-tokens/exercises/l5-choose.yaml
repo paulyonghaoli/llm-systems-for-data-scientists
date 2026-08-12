@@ -1,0 +1,153 @@
+id: tok-l5-choose
+title: "Feasible first, cheap second"
+lesson: modules/01-tokens/05-costing-a-design
+description: |
+  Pick a design. The order of the checks is the lesson: **feasibility is
+  binary and free to check, so it comes first.** A design that does not fit
+  the window is not an expensive design, it is not a design.
+
+  Implement:
+
+  - `fits(design, n, window)` — does the largest single request, **plus the
+    reserved output**, fit?
+  - `choose(n, window)` — the cheapest design that fits, or `None`.
+
+  For map-reduce the largest single request is the *reduce* call, not a map
+  call. For the other two it is the only call.
+
+setup_code: |
+  C = 400
+  S = 145
+  K = 6
+  A = 200
+  MU = 60
+  R = 4.0
+
+  DESIGNS = ("long_context", "retrieval", "map_reduce")
+
+  def cost_units(design, n, c=C, s=S, k=K, a=A, mu=MU, r=R):
+      """Cost of one query over n chunks, in units of a single input token.
+
+      The model from exercise tok-l5-cost, already correct. `design` is one of
+      the three strings in DESIGNS.
+      """
+      if design == "long_context":
+          return (s + n * c) + a * r
+      if design == "retrieval":
+          return (s + min(k, n) * c) + a * r
+      if design == "map_reduce":
+          return n * ((s + c) + mu * r) + (s + n * mu) + a * r
+      raise ValueError(design)
+
+  def largest_request_tokens(design, n, c=C, s=S, k=K, mu=MU):
+      """Input tokens in the biggest single call the design makes."""
+      if design == "long_context":
+          return s + n * c
+      if design == "retrieval":
+          return s + min(k, n) * c
+      if design == "map_reduce":
+          return s + n * mu          # the reduce call
+      raise ValueError(design)
+
+starter_code: |
+  def fits(design, n, window, a=A):
+      """True if the design's largest request fits, leaving room for the answer."""
+      return largest_request_tokens(design, n) <= window
+
+
+  def choose(n, window):
+      """Cheapest design that fits, or None."""
+      return min(DESIGNS, key=lambda d: cost_units(d, n))
+
+
+  for n in (10, 250, 1000, 100000):
+      print(f"n={n:>6}  fits={[d for d in DESIGNS if fits(d, n, 100_000)]}  "
+            f"choice={choose(n, 100_000)}")
+
+tests: |
+  W = 100_000
+
+  # Room for the answer is part of fitting. 249 chunks is 99,745 input tokens,
+  # which leaves 255 for a 200-token answer; 250 chunks does not.
+  assert largest_request_tokens("long_context", 249) == 99_745, "sanity check"
+  assert fits("long_context", 249, W) is True
+  assert fits("long_context", 250, W) is False, (
+      "250 chunks needs 100,145 input tokens, which already exceeds the window "
+      "before any answer is generated"
+  )
+  assert fits("long_context", 248, W) is True
+
+  # The boundary case the starter gets wrong: an input that fits the window
+  # on its own, and leaves less room than the answer needs. Retrieval's
+  # request is 2,545 tokens, so a 2,600-token window holds the input and not
+  # the reply.
+  snug = 2600
+  assert largest_request_tokens("retrieval", 1000) == 2545, "sanity check"
+  assert largest_request_tokens("retrieval", 1000) <= snug
+  assert fits("retrieval", 1000, snug) is False, (
+      "the input is 2,545 tokens and the window is 2,600, so it fits with 55 to "
+      f"spare - which is less than the {A} tokens the answer needs. Input and "
+      "output share the window, so a prompt that nearly fills it has nowhere to "
+      "put a reply."
+  )
+  assert fits("retrieval", 1000, 2745) is True, "2,545 + 200 is exactly 2,745"
+
+  # Retrieval fits at any corpus size; that is its structural advantage.
+  assert all(fits("retrieval", n, W) for n in (10, 1000, 10**6))
+
+  # Map-reduce is limited by its reduce call, so it survives far longer than
+  # long context but is not unbounded either.
+  assert fits("map_reduce", 1000, W) is True
+  assert fits("map_reduce", 10**6, W) is False
+
+  # choose() must never return an infeasible design.
+  assert choose(10, W) == "retrieval"
+  assert choose(1000, W) == "retrieval"
+
+  # The cheapest FEASIBLE design must win, not the cheapest overall. In a
+  # 2,300-token window with 5 chunks, only map-reduce fits - and it is the
+  # most expensive of the three.
+  tiny = 2300
+  assert fits("long_context", 5, tiny) is False, "sanity check"
+  assert fits("retrieval", 5, tiny) is False, "sanity check"
+  assert fits("map_reduce", 5, tiny) is True, "sanity check"
+  assert cost_units("map_reduce", 5) > cost_units("long_context", 5), "sanity check"
+  assert choose(5, tiny) == "map_reduce", (
+      f"got {choose(5, tiny)!r}. Only map-reduce fits this window, so it is the "
+      "answer even though it costs the most - ranking by cost before filtering "
+      "by feasibility recommends a design that cannot be built."
+  )
+
+  # A window too small for even one retrieval call has no answer.
+  assert choose(1000, 500) is None, (
+      "no design fits a 500-token window here, and None is the honest return "
+      "value - the alternative is recommending something that cannot be built"
+  )
+
+  # And the cheapest feasible design is genuinely the cheapest among those
+  # that fit, at every size tested.
+  for n in (1, 100, 249, 1000):
+      pick = choose(n, W)
+      feasible = [d for d in DESIGNS if fits(d, n, W)]
+      assert pick == min(feasible, key=lambda d: cost_units(d, n))
+
+hints:
+  - "`fits` ignores the answer. The window is shared between input and output."
+  - "`choose` ranks every design, including ones that cannot be built. Filter first, then take the minimum."
+  - "When nothing fits, return None rather than the least-bad option."
+
+solution: |
+  def fits(design, n, window, a=A):
+      return largest_request_tokens(design, n) + a <= window
+
+
+  def choose(n, window):
+      feasible = [d for d in DESIGNS if fits(d, n, window)]
+      if not feasible:
+          return None
+      return min(feasible, key=lambda d: cost_units(d, n))
+
+
+  for n in (10, 250, 1000, 100000):
+      print(f"n={n:>6}  fits={[d for d in DESIGNS if fits(d, n, 100_000)]}  "
+            f"choice={choose(n, 100_000)}")

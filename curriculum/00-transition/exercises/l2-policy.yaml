@@ -1,0 +1,162 @@
+id: tr-l2-policy
+title: "The call, with a policy around it"
+lesson: modules/00-transition/02-anatomy
+description: |
+  Stage 4 of the pipeline. Wrap a transport in the three policies that stop a
+  struggling provider from taking the rest of your system with it: a timeout,
+  a bounded number of attempts, and a token budget.
+
+  Two details decide whether this is right, and both are easy to get wrong in
+  a way that only shows up on the bill:
+
+  1. **A failed attempt is still billed.** The provider processed your input
+     before it timed out.
+  2. **The budget is checked before an attempt, not after.** Checking
+     afterwards tells you about an overrun you have already paid for.
+
+setup_code: |
+  class Timeout(Exception):
+      """The transport gave up waiting. Transient: worth another attempt."""
+
+  class TransientError(Exception):
+      """The provider failed for a reason that may not recur. Retryable."""
+
+  class BudgetExceeded(Exception):
+      """Raised when an attempt would take spending past `budget_tokens`.
+
+      Carries `.spent` (tokens consumed so far) and `.budget`.
+      """
+
+      def __init__(self, spent, budget):
+          super().__init__(f"spent {spent} of {budget} allowed")
+          self.spent = spent
+          self.budget = budget
+
+  class Transport:
+      """A deterministic fake provider.
+
+      Raises on the attempt numbers listed in `fail_on` (1-indexed) and
+      otherwise returns a response costing `cost` tokens.
+      """
+      def __init__(self, fail_on=(), cost=100, exc=TransientError):
+          self.fail_on = set(fail_on)
+          self.cost = cost
+          self.exc = exc
+          self.calls = 0
+
+      def __call__(self, request, timeout_s):
+          self.calls += 1
+          if self.calls in self.fail_on:
+              raise self.exc(f"simulated failure on attempt {self.calls}")
+          return {"total_tokens": self.cost}
+
+  REQUEST = {"estimated_tokens": 100}
+
+starter_code: |
+  def call_with_policy(transport, request, timeout_s, max_attempts, budget_tokens):
+      """Call `transport`, returning (response, tokens_spent).
+
+      Raise BudgetExceeded if an attempt would take spending over budget.
+      Re-raise the transport's own error if every attempt fails.
+      """
+      spent = 0
+      for attempt in range(1, max_attempts + 1):
+          try:
+              response = transport(request, timeout_s=timeout_s)
+          except (Timeout, TransientError):
+              if attempt == max_attempts:
+                  raise
+              continue
+          spent += response["total_tokens"]
+          if spent > budget_tokens:
+              raise BudgetExceeded(spent, budget_tokens)
+          return response, spent
+
+
+  t = Transport(fail_on=(1,))
+  print(call_with_policy(t, REQUEST, timeout_s=5, max_attempts=3, budget_tokens=1000))
+  print("transport calls:", t.calls)
+
+tests: |
+  # 1. The happy path.
+  t = Transport()
+  response, spent = call_with_policy(t, REQUEST, 5, 3, 1000)
+  assert t.calls == 1
+  assert response["total_tokens"] == 100
+  assert spent == 100
+
+  # 2. One failure, then success. The failed attempt is still billed.
+  t = Transport(fail_on=(1,))
+  response, spent = call_with_policy(t, REQUEST, 5, 3, 1000)
+  assert t.calls == 2, f"expected 2 attempts, transport saw {t.calls}"
+  assert spent == 200, (
+      f"spent {spent}, expected 200. The first attempt failed, but the provider "
+      "had already read the input before it failed and charged for it. A retry "
+      "policy that bills only successes will under-report spend by exactly the "
+      "failure rate."
+  )
+
+  # 3. Every attempt fails: the transport's own error reaches the caller.
+  t = Transport(fail_on=(1, 2, 3))
+  try:
+      call_with_policy(t, REQUEST, 5, 3, 1000)
+  except TransientError:
+      pass
+  else:
+      raise AssertionError("exhausting the attempts must re-raise, not return None")
+  assert t.calls == 3, f"expected exactly 3 attempts, got {t.calls}"
+
+  # 4. The budget stops the SECOND attempt before it is made.
+  t = Transport(fail_on=(1,))
+  try:
+      call_with_policy(t, REQUEST, 5, 3, 150)
+  except BudgetExceeded as e:
+      assert e.spent == 100, f"reported spend {e.spent}, expected 100"
+  else:
+      raise AssertionError("a second attempt would exceed the budget; it must not happen")
+  assert t.calls == 1, (
+      f"the transport was called {t.calls} times. The budget has to be checked "
+      "BEFORE an attempt - checking afterwards reports an overrun you already paid for."
+  )
+
+  # 5. A budget too small for even the first attempt costs nothing at all.
+  t = Transport()
+  try:
+      call_with_policy(t, REQUEST, 5, 3, 50)
+  except BudgetExceeded:
+      pass
+  else:
+      raise AssertionError("expected BudgetExceeded before any call")
+  assert t.calls == 0, f"nothing should have been sent, but the transport saw {t.calls} call(s)"
+
+  # 6. Timeouts are retried the same way as transient errors.
+  t = Transport(fail_on=(1, 2), exc=Timeout)
+  response, spent = call_with_policy(t, REQUEST, 5, 3, 1000)
+  assert t.calls == 3
+  assert spent == 300
+
+hints:
+  - "The starter checks the budget after a successful call. Move the check to the top of the loop, before the attempt."
+  - "The `except` branch returns to the loop without recording anything. A failed attempt costs `request['estimated_tokens']`."
+  - "The pre-attempt check is: would `spent + request['estimated_tokens']` exceed `budget_tokens`? If so, raise BudgetExceeded(spent, budget_tokens)."
+
+solution: |
+  def call_with_policy(transport, request, timeout_s, max_attempts, budget_tokens):
+      spent = 0
+      for attempt in range(1, max_attempts + 1):
+          if spent + request["estimated_tokens"] > budget_tokens:
+              raise BudgetExceeded(spent, budget_tokens)
+          try:
+              response = transport(request, timeout_s=timeout_s)
+          except (Timeout, TransientError):
+              spent += request["estimated_tokens"]
+              if attempt == max_attempts:
+                  raise
+              continue
+          spent += response["total_tokens"]
+          return response, spent
+
+
+  t = Transport(fail_on=(1,))
+  print(call_with_policy(t, REQUEST, timeout_s=5, max_attempts=3, budget_tokens=1000))
+  print("transport calls:", t.calls)

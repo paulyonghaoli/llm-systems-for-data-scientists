@@ -1,0 +1,108 @@
+A tokenizer is a compression scheme that has been frozen into a contract. It is
+fitted once, on a corpus chosen by someone else, and then it never changes
+again for the life of the model. Everything the model reads passes through it,
+and everything the model writes comes back out through it. If the tokenizer
+handles some kind of text badly, the model handles that text badly, and there
+is no amount of prompting that repairs the damage.
+
+This is an unfamiliar shape for anyone who arrives from ordinary machine
+learning. In a normal pipeline the vectorizer belongs to you. You fit it on
+your training split, you inspect the vocabulary, you notice that it has
+learned three spellings of the same word, and you fix the preprocessing. The
+vectorizer is a knob. Here it is a wall. You did not fit it, you cannot refit
+it, and in most cases you cannot even see the corpus it was fitted on.
+
+The consequences are practical rather than philosophical. Text is billed by
+the token, not by the word and not by the character, so the cost of a request
+depends on a function you did not choose. Context limits are stated in tokens,
+so how much of a document fits depends on the same function. A budget computed
+in words will be wrong, and it will be wrong by a different factor for every
+language and every kind of document you feed it.
+
+Consider what happens with numbers. A run of digits is not one symbol to a
+tokenizer. Depending on how the vocabulary was built, the year may be one
+token, or two, or four. Two numbers that a person reads as obviously similar
+can arrive at the model with completely different shapes. This is one of the
+reasons that arithmetic is harder for these systems than their other abilities
+suggest. The difficulty is partly in the input representation, before any
+reasoning has been attempted at all.
+
+Whitespace behaves in a way that surprises people the first time they measure
+it. In most modern vocabularies the leading space belongs to the word that
+follows it. The word at the start of a sentence and the same word in the
+middle of a sentence are therefore different tokens, with different
+identifiers and different learned representations. Strip the spaces from a
+prompt to save room and you have not saved room; you have replaced every
+common token with a rarer one and made the input stranger than it was.
+
+Languages are not billed equally. A vocabulary fitted mostly on English will
+represent common English words as single tokens and will fall back to raw
+bytes for scripts it has not seen. Because those scripts often use three bytes
+per character where English uses one, the same sentence can cost several times
+as much to send. The same document therefore has several different lengths
+depending only on the language it happens to be written in, and any system
+that charges by the token charges accordingly.
+
+Code is its own case. Indentation is a large fraction of a source file, and
+whether a run of four spaces is one token or four is a decision made long
+before you arrived. Structured data such as JSON is worse: the punctuation is
+repetitive, the keys repeat on every record, and a format designed to be
+convenient for programs turns out to be an expensive way to speak to a model.
+The same information expressed as a compact table can cost a fraction of what
+it costs as a list of objects.
+
+None of this is visible from the outside. A request that overruns a context
+limit does not usually announce itself as a tokenization problem. It arrives
+as a truncated document, a missing final instruction, an answer that ignores
+the last half of the input. The failure looks like a reasoning failure and it
+is really an accounting failure. This is why measuring token counts directly,
+on your own real documents, is worth more than any rule of thumb about words
+per token.
+
+The algorithm behind most of these vocabularies is simple enough to write in
+an afternoon. Start with the raw bytes, because starting with bytes means
+nothing can ever be out of vocabulary. Count how often each adjacent pair of
+symbols occurs. Take the most frequent pair, give it a new symbol, and replace
+every occurrence. Repeat until the vocabulary reaches the size you asked for.
+That is the whole method. What makes one implementation different from
+another is not the loop but the decisions around it.
+
+The first decision is where merges are not allowed to happen. Without a rule,
+the procedure will cheerfully learn a single symbol for a full stop followed
+by a space followed by the word that usually starts the next sentence. Such a
+symbol is frequent and therefore attractive, and it is also useless, because
+it welds together things that have nothing to do with each other. So the text
+is cut into pieces first, along boundaries between letters, digits,
+punctuation and whitespace, and merges are confined within a piece.
+
+The second decision is what to do about ties. Two pairs will often occur
+exactly as often as each other, especially early in training on a small
+corpus. Any rule for choosing between them works. Having no rule does not
+work, because the vocabulary then depends on the order a dictionary happened
+to be built in, and two runs of the same program on the same text produce
+different tokenizers. Reproducibility here is not a nicety; a vocabulary that
+cannot be regenerated cannot be audited.
+
+The third decision is when to stop. Asking for a vocabulary of a given size
+does not guarantee you receive one. Once no pair occurs more than once, every
+further merge spends a vocabulary slot to shorten exactly one position in the
+corpus, which is not a trade worth making. A small corpus therefore yields a
+small vocabulary no matter what size was requested, and a training run that
+quietly returns fewer symbols than asked for is behaving correctly.
+
+Scale is the part that cannot be reproduced on a laptop. A vocabulary fitted
+on a few kilobytes of one person's prose learns that particular person's
+habits. A vocabulary fitted on a large fraction of the written internet learns
+the shapes that recur across many languages and many genres. The algorithm is
+identical. The difference in outcome is entirely a difference in the data, and
+it shows up most clearly in the text furthest from the training distribution,
+where the small vocabulary degrades all the way back to individual bytes while
+the large one still has something useful to say.
+
+Measurement is the habit worth keeping. Take your own documents, count the
+tokens, divide by the characters, and look at the number. Do it separately for
+prose, for code, for structured data and for every language you actually
+serve. The result is a small table that will predict your costs and your
+truncation failures better than any general advice, and it takes a few minutes
+to produce. Whatever else changes about these systems, that table stays
+useful, because it describes your data rather than somebody else's model.

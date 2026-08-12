@@ -1,0 +1,65 @@
+[
+  {
+    "period": "2026-01",
+    "requests": 118432,
+    "tokens_in": 41293811,
+    "tokens_out": 5218440,
+    "latency_p50_ms": 412,
+    "latency_p95_ms": 1830,
+    "cost_usd": 612.47
+  },
+  {
+    "period": "2026-02",
+    "requests": 127905,
+    "tokens_in": 44810227,
+    "tokens_out": 5602119,
+    "latency_p50_ms": 408,
+    "latency_p95_ms": 1795,
+    "cost_usd": 661.83
+  },
+  {
+    "period": "2026-03",
+    "requests": 141220,
+    "tokens_in": 49733018,
+    "tokens_out": 6144907,
+    "latency_p50_ms": 421,
+    "latency_p95_ms": 1902,
+    "cost_usd": 734.19
+  },
+  {
+    "period": "2026-04",
+    "requests": 139877,
+    "tokens_in": 48912664,
+    "tokens_out": 6087553,
+    "latency_p50_ms": 417,
+    "latency_p95_ms": 1874,
+    "cost_usd": 722.05
+  },
+  {
+    "period": "2026-05",
+    "requests": 152308,
+    "tokens_in": 53880412,
+    "tokens_out": 6710288,
+    "latency_p50_ms": 433,
+    "latency_p95_ms": 2011,
+    "cost_usd": 796.44
+  },
+  {
+    "period": "2026-06",
+    "requests": 164991,
+    "tokens_in": 58402117,
+    "tokens_out": 7255630,
+    "latency_p50_ms": 429,
+    "latency_p95_ms": 1988,
+    "cost_usd": 863.12
+  },
+  {
+    "period": "2026-07",
+    "requests": 171043,
+    "tokens_in": 60558290,
+    "tokens_out": 7519874,
+    "latency_p50_ms": 436,
+    "latency_p95_ms": 2043,
+    "cost_usd": 895.3
+  }
+]

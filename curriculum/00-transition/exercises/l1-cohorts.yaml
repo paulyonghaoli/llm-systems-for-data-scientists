@@ -1,0 +1,118 @@
+id: tr-l1-cohorts
+title: "Which runs may be compared?"
+lesson: modules/00-transition/01-what-changes
+description: |
+  Two runs are two measurements of the same thing only if the model version,
+  the decoding parameters and the rendered prompt all match. Differ in any of
+  those and you have one measurement each, of two different things.
+
+  Write the function that says so — and says *which* thing differs, because
+  "not comparable" is not actionable and "the model version changed" is.
+
+setup_code: |
+  import json
+
+  def params_signature(params):
+      """A stable signature for a parameter dict.
+
+      Order-insensitive on purpose: {"temperature": 0, "top_p": 1} and
+      {"top_p": 1, "temperature": 0} are the same request.
+      """
+      return json.dumps(params, sort_keys=True)
+
+  def record(version, params, prompt_hash="p1"):
+      """Build one run record. A convenience for the tests; real records
+      carry token counts and latencies too."""
+      return {
+          "model_version": version,
+          "params": params,
+          "prompt_hash": prompt_hash,
+      }
+
+  BASE = record("m-2026-03-01", {"temperature": 0.0, "top_p": 1.0})
+
+starter_code: |
+  def cohort_key(r):
+      """A hashable key. Two records share a key iff they are comparable."""
+      return (params_signature(r["params"]), r["prompt_hash"])
+
+
+  def why_not_comparable(a, b):
+      """Return the FIRST field that differs, checking in this order:
+
+          "model_version", then "params", then "prompt"
+
+      Return None if the two records are comparable.
+      """
+      if params_signature(a["params"]) != params_signature(b["params"]):
+          return "params"
+      if a["prompt_hash"] != b["prompt_hash"]:
+          return "prompt"
+      return None
+
+
+  newer = record("m-2026-08-01", {"temperature": 0.0, "top_p": 1.0})
+  print("comparable?", why_not_comparable(BASE, newer))
+
+tests: |
+  assert why_not_comparable(BASE, BASE) is None, "a record is comparable with itself"
+
+  reordered = record("m-2026-03-01", {"top_p": 1.0, "temperature": 0.0})
+  assert why_not_comparable(BASE, reordered) is None, (
+      "these two records set identical parameters in a different dict order. "
+      "params_signature sorts keys precisely so that ordering cannot matter - "
+      "compare signatures, not dicts."
+  )
+
+  newer = record("m-2026-08-01", {"temperature": 0.0, "top_p": 1.0})
+  assert why_not_comparable(BASE, newer) == "model_version", (
+      f"got {why_not_comparable(BASE, newer)!r}. The provider changed the model "
+      "between these two runs and everything else matched, so the comparison is "
+      "invalid - this is the single most common bad comparison in the field, and "
+      "a cohort key that omits the version cannot see it."
+  )
+
+  hotter = record("m-2026-03-01", {"temperature": 0.7, "top_p": 1.0})
+  assert why_not_comparable(BASE, hotter) == "params"
+
+  other_prompt = record("m-2026-03-01", {"temperature": 0.0, "top_p": 1.0}, "p2")
+  assert why_not_comparable(BASE, other_prompt) == "prompt"
+
+  # Order matters: when several fields differ, report the outermost one.
+  everything = record("m-2026-08-01", {"temperature": 0.7}, "p2")
+  assert why_not_comparable(BASE, everything) == "model_version", (
+      "when more than one field differs, report model_version first - it is the "
+      "one the reader can do least about and needs to know soonest"
+  )
+
+  # The key and the reason must agree with each other.
+  assert cohort_key(BASE) == cohort_key(reordered)
+  assert cohort_key(BASE) != cohort_key(newer), (
+      "cohort_key says these two runs are the same cohort, but they were "
+      "produced by different model versions"
+  )
+  assert cohort_key(BASE) != cohort_key(hotter)
+  assert cohort_key(BASE) != cohort_key(other_prompt)
+
+hints:
+  - "Both functions need the model version. The starter's `cohort_key` has only two of the three fields."
+  - "`why_not_comparable` checks in a fixed order: model_version, then params, then prompt. Add the missing first check."
+  - "Keep the two functions consistent: `cohort_key(a) == cohort_key(b)` should be true exactly when `why_not_comparable(a, b)` is None."
+
+solution: |
+  def cohort_key(r):
+      return (r["model_version"], params_signature(r["params"]), r["prompt_hash"])
+
+
+  def why_not_comparable(a, b):
+      if a["model_version"] != b["model_version"]:
+          return "model_version"
+      if params_signature(a["params"]) != params_signature(b["params"]):
+          return "params"
+      if a["prompt_hash"] != b["prompt_hash"]:
+          return "prompt"
+      return None
+
+
+  newer = record("m-2026-08-01", {"temperature": 0.0, "top_p": 1.0})
+  print("comparable?", why_not_comparable(BASE, newer))

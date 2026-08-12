@@ -1,0 +1,125 @@
+id: tr-l4-latency
+title: "The number your users experience"
+lesson: modules/00-transition/04-cost-and-latency
+description: |
+  Latency is heavy-tailed, so summarising it with a mean and a standard
+  deviation describes a distribution you do not have.
+
+  Implement `latency_report(samples)` returning `mean`, `p50`, `p95`, `p99`
+  and `pct_slower_than_mean`. Use the **nearest-rank** percentile, which is
+  exact and has no interpolation to argue about:
+
+  ```
+  p(q) = sorted(samples)[ceil(q * n) - 1]
+  ```
+
+  The starter estimates the tail as `mean + 2 * stdev`, which is the right
+  answer for a normal distribution and is why it is such a popular mistake.
+
+setup_code: |
+  import math
+  import random
+  import statistics
+
+  def make_latencies(n=2000, seed=20260809):
+      """Mostly steady, with a 5% chance of waiting behind another request."""
+      rng = random.Random(seed)
+      out = []
+      for _ in range(n):
+          ms = 1500 + 900 * rng.random()
+          if rng.random() < 0.05:
+              ms += rng.expovariate(1 / 3000)
+          out.append(ms)
+      return out
+
+  SAMPLES = make_latencies()
+
+starter_code: |
+  def latency_report(samples):
+      """Return mean, p50, p95, p99 and pct_slower_than_mean."""
+      mean = statistics.fmean(samples)
+      sd = statistics.pstdev(samples)
+      return {
+          "mean": mean,
+          "p50": mean,
+          "p95": mean + 2 * sd,
+          "p99": mean + 3 * sd,
+          "pct_slower_than_mean": 50.0,
+      }
+
+
+  r = latency_report(SAMPLES)
+  for k, v in r.items():
+      print(f"{k:22} {v:9.1f}")
+
+tests: |
+  r = latency_report(SAMPLES)
+  n = len(SAMPLES)
+
+  # A percentile is defined by how many observations fall above it. This is
+  # the check that cannot be passed by a formula that merely looks plausible.
+  above_95 = sum(1 for s in SAMPLES if s > r["p95"])
+  assert 0.04 * n <= above_95 <= 0.05 * n, (
+      f"{above_95} of {n} samples ({above_95 / n:.1%}) are above your p95; it "
+      "should be about 5%. If you estimated the tail as mean + 2*stdev you have "
+      "assumed a normal distribution, and this one is not remotely normal."
+  )
+  above_99 = sum(1 for s in SAMPLES if s > r["p99"])
+  assert 0.008 * n <= above_99 <= 0.01 * n, f"{above_99} samples above p99, expected ~1%"
+
+  above_50 = sum(1 for s in SAMPLES if s > r["p50"])
+  assert 0.49 * n <= above_50 <= 0.51 * n, (
+      f"{above_50} of {n} samples are above your p50. The median is not the "
+      "mean - on a right-skewed distribution the mean sits above it."
+  )
+
+  assert r["p50"] < r["p95"] < r["p99"], "percentiles must be ordered"
+
+  # The mean is dragged up by the tail, so it is not the middle of anything.
+  assert r["mean"] > r["p50"], "right-skewed data has a mean above its median"
+  assert 30.0 < r["pct_slower_than_mean"] < 45.0, (
+      f"you reported {r['pct_slower_than_mean']:.1f}%. Count it rather than "
+      "assuming 50: on this data only about 35% of requests are slower than "
+      "the mean, which is why 'average latency' describes a request most "
+      "users never make."
+  )
+
+  # The shortcut, quantified: it is not a small error.
+  sd = statistics.pstdev(SAMPLES)
+  naive_p95 = statistics.fmean(SAMPLES) + 2 * sd
+  assert naive_p95 > 1.5 * r["p95"], (
+      "sanity check on the fixture: mean + 2*stdev should badly overshoot here"
+  )
+
+  # Degenerate inputs must not explode.
+  one = latency_report([42.0])
+  assert one["p50"] == one["p95"] == one["p99"] == 42.0
+  flat = latency_report([10.0] * 50)
+  assert flat["p95"] == 10.0 and flat["pct_slower_than_mean"] == 0.0
+
+hints:
+  - "None of the percentiles in the starter is computed from the data's order. Sort the samples first."
+  - "`sorted(samples)[math.ceil(q * n) - 1]`, with the index clamped to at least 0."
+  - "`pct_slower_than_mean` is a count, not an assumption: what fraction of samples exceed the mean?"
+
+solution: |
+  def latency_report(samples):
+      s = sorted(samples)
+      n = len(s)
+
+      def pct(q):
+          return s[max(0, math.ceil(q * n) - 1)]
+
+      mean = statistics.fmean(s)
+      return {
+          "mean": mean,
+          "p50": pct(0.50),
+          "p95": pct(0.95),
+          "p99": pct(0.99),
+          "pct_slower_than_mean": 100.0 * sum(1 for x in s if x > mean) / n,
+      }
+
+
+  r = latency_report(SAMPLES)
+  for k, v in r.items():
+      print(f"{k:22} {v:9.1f}")

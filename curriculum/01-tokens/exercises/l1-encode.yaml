@@ -1,0 +1,156 @@
+id: tok-l1-encode
+title: "Encode with a trained vocabulary"
+lesson: modules/01-tokens/01-bpe
+description: |
+  Training is done. A tokenizer has been trained for you on a small corpus of
+  `the`/`there`/`other`/`theory` text, and `MERGES` maps each learned pair to
+  the symbol that replaced it — in **learning order**, so lower ids were
+  learned earlier.
+
+  Encoding is the same merge loop, applied in that same order. Which is the
+  whole difficulty: at any moment several learned pairs may be applicable, and
+  you must take the one that was learned **earliest**, not the one that
+  appears leftmost in the text.
+
+  Both choices round-trip perfectly. Only one of them is the tokenizer the
+  model was trained with.
+
+setup_code: |
+  import re
+  from collections import Counter
+
+  SPLIT = re.compile(
+      r"'(?:s|t|re|ve|m|ll|d)"
+      r"| ?[^\W\d_]+"
+      r"| ?\d+"
+      r"| ?[^\s\w]+"
+      r"|\s+(?!\S)"
+      r"|\s+"
+      r"|[\s\S]"
+  )
+
+  def pretokenize(text):
+      """Split text into chunks that a merge may never cross.
+
+      Lossless: "".join(pretokenize(t)) == t for every string.
+      """
+      return SPLIT.findall(text)
+
+  def merge(ids, pair, new_id):
+      """Replace every non-overlapping occurrence of `pair` with `new_id`.
+
+      Returns a new list, shorter than `ids` by one per replacement.
+      """
+      out = []
+      i = 0
+      while i < len(ids):
+          if i + 1 < len(ids) and ids[i] == pair[0] and ids[i + 1] == pair[1]:
+              out.append(new_id)
+              i += 2
+          else:
+              out.append(ids[i])
+              i += 1
+      return out
+
+  def _train(text, vocab_size):
+      chunks = [list(c.encode("utf-8")) for c in pretokenize(text)]
+      merges = {}
+      vocab = {i: bytes([i]) for i in range(256)}
+      for new_id in range(256, vocab_size):
+          stats = Counter()
+          for ids in chunks:
+              for pair in zip(ids, ids[1:]):
+                  stats[pair] += 1
+          if not stats:
+              break
+          best = min(stats, key=lambda p: (-stats[p], p))
+          if stats[best] < 2:
+              break
+          chunks = [merge(ids, best, new_id) for ids in chunks]
+          merges[best] = new_id
+          vocab[new_id] = vocab[best[0]] + vocab[best[1]]
+      return merges, vocab
+
+  CORPUS = (
+      "the theory of the thermometer. there, then, they threw the other three. "
+      "the theatre there. other others. thermal theory."
+  )
+  MERGES, VOCAB = _train(CORPUS, 280)
+
+  def decode(ids):
+      return b"".join(VOCAB[i] for i in ids).decode("utf-8", errors="replace")
+
+  def pieces(ids):
+      """The text each token stands for - useful for seeing what you produced."""
+      return [decode([i]) for i in ids]
+
+starter_code: |
+  def encode(text):
+      """Turn text into a list of token ids using MERGES."""
+      out = []
+      for chunk in pretokenize(text):
+          ids = list(chunk.encode("utf-8"))
+          while True:
+              applicable = None
+              for pair in zip(ids, ids[1:]):
+                  if pair in MERGES:
+                      applicable = pair
+                      break
+              if applicable is None:
+                  break
+              ids = merge(ids, applicable, MERGES[applicable])
+          out.extend(ids)
+      return out
+
+
+  print(pieces(encode("there")))
+  print(pieces(encode("the the")))
+
+tests: |
+  got = pieces(encode("there"))
+  assert got == ["the", "re"], (
+      f"encode('there') produced the pieces {got}.\n"
+      "  The correct answer is ['the', 're']: 'the' and 're' were both learned "
+      "before 'ther', so both fire before 'ther' ever becomes applicable.\n"
+      "  Taking the leftmost applicable pair instead gives ['ther', 'e'].\n"
+      "  Note that BOTH decode back to 'there' - a round-trip test cannot tell "
+      "them apart, and the model only recognises one of them."
+  )
+
+  assert pieces(encode("the the")) == ["the", " the"], (
+      f"got {pieces(encode('the the'))}: the leading space belongs to the word "
+      "that follows it, and no token may span the gap between two chunks"
+  )
+
+  for text in ["there", "the other theory", "", "thermometer", "3 cats!"]:
+      assert decode(encode(text)) == text, f"round trip failed on {text!r}"
+
+  # Byte-level BPE has no out-of-vocabulary. Text the tokenizer has never seen
+  # still encodes - it just costs one token per byte.
+  assert decode(encode("東京")) == "東京"
+  assert len(encode("東京")) == len("東京".encode("utf-8")) == 6
+
+  assert encode("") == [], "the empty string encodes to no tokens"
+
+hints:
+  - "The bug is not in the merging, it is in the choosing. Collect every applicable pair first, then pick one."
+  - "`{p for p in zip(ids, ids[1:]) if p in MERGES}` gives you the applicable pairs."
+  - "Lower id = learned earlier. So the pair you want is `min(applicable, key=lambda p: MERGES[p])`."
+
+solution: |
+  def encode(text):
+      out = []
+      for chunk in pretokenize(text):
+          ids = list(chunk.encode("utf-8"))
+          while len(ids) >= 2:
+              applicable = {p for p in zip(ids, ids[1:]) if p in MERGES}
+              if not applicable:
+                  break
+              earliest = min(applicable, key=lambda p: MERGES[p])
+              ids = merge(ids, earliest, MERGES[earliest])
+          out.extend(ids)
+      return out
+
+
+  print(pieces(encode("there")))
+  print(pieces(encode("the the")))

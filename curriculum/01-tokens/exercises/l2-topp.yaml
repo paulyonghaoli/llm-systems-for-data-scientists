@@ -1,0 +1,104 @@
+id: tok-l2-topp
+title: "Nucleus sampling, including the token that crosses"
+lesson: modules/01-tokens/02-sampling
+description: |
+  Top-p keeps the shortest set of highest-probability tokens whose mass
+  reaches `p`, discards the rest, and renormalises.
+
+  The entire difficulty is one word: **reaches**. The token that carries the
+  cumulative sum across the threshold is *inside* the nucleus. Leave it out
+  and a confident position — where the top token alone already exceeds `p` —
+  leaves you with an empty set and nothing to sample from.
+
+  Return a probability vector the same length as the input, with the discarded
+  tokens set to zero and the survivors renormalised to sum to 1.
+
+setup_code: |
+  import numpy as np
+
+  UNSORTED = np.array([0.15, 0.50, 0.10, 0.25])
+  CONFIDENT = np.array([0.95, 0.03, 0.02])
+
+starter_code: |
+  def top_p_filter(probs, p):
+      """Keep the smallest set of top tokens whose mass reaches p."""
+      probs = np.asarray(probs, dtype=float)
+      order = np.argsort(probs)[::-1]
+      cum = np.cumsum(probs[order])
+      keep = order[cum < p]
+      out = np.zeros_like(probs)
+      out[keep] = probs[keep]
+      return out / out.sum()
+
+
+  print("unsorted ", np.round(top_p_filter(UNSORTED, 0.85), 4))
+  print("confident", np.round(top_p_filter(CONFIDENT, 0.90), 4))
+
+tests: |
+  def close(a, b, tol=1e-9):
+      return bool(np.all(np.abs(np.asarray(a) - np.asarray(b)) < tol))
+
+  # A confident position: the top token alone already carries 0.95 > 0.90.
+  out = top_p_filter(CONFIDENT, 0.90)
+  assert np.all(np.isfinite(out)), (
+      "top_p_filter returned inf or nan on a confident distribution. The top "
+      "token's 0.95 already exceeds p=0.90, so a strict `cum < p` keeps NOTHING "
+      "and the renormalisation divides by zero. The token that crosses the "
+      "threshold belongs inside the nucleus."
+  )
+  assert close(out, [1.0, 0.0, 0.0]), f"expected all mass on the top token, got {out}"
+
+  # Unsorted input: sorted descending it is [0.50, 0.25, 0.15, 0.10], whose
+  # cumulative sums are [0.50, 0.75, 0.90, 1.00]. At p=0.85 the nucleus is the
+  # first three.
+  out = top_p_filter(UNSORTED, 0.85)
+  assert close(out.sum(), 1.0), "the filtered distribution must be renormalised"
+  assert out[2] == 0.0, "the 0.10 token is outside the nucleus at p=0.85"
+  assert int((out > 0).sum()) == 3, f"expected a nucleus of 3 tokens, got {int((out > 0).sum())}"
+  assert close(out[1], 0.50 / 0.90), "survivors are rescaled by the mass they retain"
+  assert close(out[3], 0.25 / 0.90)
+
+  # p = 1.0 keeps everything and changes nothing.
+  assert close(top_p_filter(UNSORTED, 1.0), UNSORTED)
+
+  # A tiny p still yields exactly one token, never zero.
+  out = top_p_filter(UNSORTED, 0.01)
+  assert int((out > 0).sum()) == 1 and close(out[1], 1.0)
+
+  # A flat distribution: at p=0.5 over 10 equal tokens, the cumulative sum
+  # reaches 0.5 at the fifth, so five survive.
+  flat = np.full(10, 0.1)
+  assert int((top_p_filter(flat, 0.5) > 0).sum()) == 5
+
+  # The nucleus is adaptive - that is the whole point of top-p over top-k.
+  wide = np.full(100, 0.01)
+  narrow = np.array([0.9] + [0.1 / 99] * 99)
+  assert (top_p_filter(wide, 0.9) > 0).sum() > 10 * (top_p_filter(narrow, 0.9) > 0).sum(), (
+      "the same p should keep many tokens on a flat distribution and very few "
+      "on a peaked one"
+  )
+
+  # The input must not be modified in place.
+  before = UNSORTED.copy()
+  top_p_filter(UNSORTED, 0.5)
+  assert close(UNSORTED, before), "top_p_filter must not mutate its argument"
+
+hints:
+  - "`cum < p` is a mask that stops one token too early. You want everything up to and including the first position where the cumulative sum reaches p."
+  - "`np.searchsorted(cum, p)` gives the index of the first cumulative sum that reaches p. The nucleus is `order[:index + 1]`."
+  - "Check your answer against the confident case by hand: with probs [0.95, 0.03, 0.02] and p=0.90, exactly one token should survive."
+
+solution: |
+  def top_p_filter(probs, p):
+      probs = np.asarray(probs, dtype=float)
+      order = np.argsort(probs)[::-1]
+      cum = np.cumsum(probs[order])
+      cutoff = int(np.searchsorted(cum, p)) + 1
+      keep = order[:cutoff]
+      out = np.zeros_like(probs)
+      out[keep] = probs[keep]
+      return out / out.sum()
+
+
+  print("unsorted ", np.round(top_p_filter(UNSORTED, 0.85), 4))
+  print("confident", np.round(top_p_filter(CONFIDENT, 0.90), 4))

@@ -1,0 +1,107 @@
+id: tok-l2-softmax
+title: "Softmax, with a temperature"
+lesson: modules/01-tokens/02-sampling
+description: |
+  Turn logits into probabilities, with a temperature knob.
+
+  $$p_i = \frac{e^{z_i / T}}{\sum_j e^{z_j / T}}$$
+
+  Two things the formula does not tell you and the tests will:
+
+  1. `exp` of a few hundred is infinity. Subtract the maximum logit first —
+     it cancels out of the ratio exactly, and without it the function returns
+     `nan` for inputs that are perfectly ordinary in a real model.
+  2. `T = 0` is not a temperature. The expression is undefined, and every
+     implementation special-cases it to mean **take the argmax**.
+
+setup_code: |
+  import numpy as np
+
+  # Real logits are not small. These are the sort of values a model actually
+  # produces before normalisation.
+  BIG = np.array([812.4, 811.9, 805.0, 790.2])
+
+starter_code: |
+  def softmax(logits, temperature=1.0):
+      """Return a probability vector over `logits`.
+
+      temperature == 0 means: put all the mass on the highest-scoring token.
+      """
+      e = np.exp(logits / temperature)
+      return e / e.sum()
+
+
+  print("T=1.0 ", np.round(softmax(np.array([2.0, 1.0, 0.0]), 1.0), 4))
+  print("big   ", np.round(softmax(BIG, 1.0), 4))
+
+tests: |
+  def close(a, b, tol=1e-9):
+      return bool(np.all(np.abs(np.asarray(a) - np.asarray(b)) < tol))
+
+  # Hand-checkable: equal logits give a uniform distribution.
+  assert close(softmax(np.array([0.0, 0.0, 0.0, 0.0])), [0.25] * 4)
+
+  p = softmax(np.array([2.0, 1.0, 0.0]))
+  assert close(p.sum(), 1.0), "a probability vector sums to 1"
+  assert p[0] > p[1] > p[2], "softmax preserves the ordering of the logits"
+  assert close(p[0] / p[1], np.e), "the ratio of two probabilities is exp of the logit gap"
+
+  # Large logits. This is the whole reason for subtracting the max.
+  q = softmax(BIG)
+  assert np.all(np.isfinite(q)), (
+      "softmax(BIG) contains inf or nan. exp(812) overflows to infinity, and "
+      "inf/inf is nan. Subtracting the maximum logit before exponentiating "
+      "changes nothing mathematically - the term cancels top and bottom - and "
+      "makes the computation possible."
+  )
+  assert close(q.sum(), 1.0)
+  assert q[0] > q[1] > q[2] > q[3]
+
+  # Shifting every logit by a constant must not change the answer at all.
+  a = softmax(np.array([2.0, 1.0, 0.0]))
+  b = softmax(np.array([2.0, 1.0, 0.0]) + 500.0)
+  assert close(a, b, 1e-12), "softmax is invariant to adding a constant to every logit"
+
+  # Temperature sharpens and flattens.
+  base = np.array([2.0, 1.0, 0.0])
+  assert softmax(base, 0.5).max() > softmax(base, 1.0).max() > softmax(base, 2.0).max(), (
+      "T < 1 must sharpen the distribution and T > 1 must flatten it"
+  )
+
+  # Temperature zero: the argmax, exactly, with no division by zero anywhere.
+  z = softmax(np.array([1.0, 5.0, 3.0]), 0.0)
+  assert np.all(np.isfinite(z)), (
+      "softmax(..., 0.0) produced inf or nan. Dividing the logits by zero is "
+      "undefined; temperature 0 is a special case meaning 'take the argmax'."
+  )
+  assert close(z, [0.0, 1.0, 0.0]), f"expected a one-hot at index 1, got {z}"
+  assert close(softmax(BIG, 0.0), [1.0, 0.0, 0.0, 0.0])
+
+  # Very low but non-zero temperature approaches the argmax without reaching it.
+  low = softmax(np.array([2.0, 1.0, 0.0]), 0.01)
+  assert low[0] > 0.999 and low[1] > 0.0, (
+      "at T=0.01 the top token should dominate but the others must remain "
+      "strictly positive - that residual probability is why low temperature is "
+      "not determinism"
+  )
+
+hints:
+  - "Two separate problems: one for very large logits, one for temperature exactly 0. Handle the zero case first, with an early return."
+  - "For T == 0, build a vector of zeros and put 1.0 at `np.argmax(logits)`."
+  - "For the overflow: `z = logits / temperature` then `z = z - z.max()` before `np.exp`. The subtraction cancels in the ratio, so the result is unchanged."
+
+solution: |
+  def softmax(logits, temperature=1.0):
+      logits = np.asarray(logits, dtype=float)
+      if temperature == 0:
+          out = np.zeros_like(logits)
+          out[np.argmax(logits)] = 1.0
+          return out
+      z = logits / temperature
+      z = z - z.max()
+      e = np.exp(z)
+      return e / e.sum()
+
+
+  print("T=1.0 ", np.round(softmax(np.array([2.0, 1.0, 0.0]), 1.0), 4))
+  print("big   ", np.round(softmax(BIG, 1.0), 4))

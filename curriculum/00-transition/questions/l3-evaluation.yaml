@@ -1,0 +1,201 @@
+id: tr-l3
+lesson: modules/00-transition/03-evaluation-breaks
+title: "0.3 - Evaluation"
+questions:
+  - id: q1
+    type: numeric
+    difficulty: easy
+    answer: 10.9
+    tolerance: 1.0
+    prompt: >-
+      You measure 80% success on 50 items. Roughly how many percentage points
+      is the 95% Wilson interval's half-width? (One decimal place.)
+    explanation: >-
+      About 10.9 points, so the interval runs from roughly 67% to 89%. Any
+      improvement smaller than that is invisible at this sample size, which is
+      most improvements.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      Ten items out of ten succeeded. What does the textbook normal-approximation
+      interval report?
+    options:
+      - text: "[1.0, 1.0] — a 100% success rate, with certainty, from ten observations."
+        correct: true
+        explanation: >-
+          At p = 1 the term p(1-p) is zero, so the interval has zero width.
+          Wilson gives roughly [0.72, 1.0], which is the honest answer.
+      - text: "[0.72, 1.0]"
+        explanation: >-
+          That is the Wilson interval. The normal approximation collapses to a
+          point.
+      - text: "It raises a division-by-zero error."
+        explanation: >-
+          Nothing divides by zero; the standard error is simply zero, and the
+          formula returns a degenerate interval without complaint.
+      - text: "[0.9, 1.0]"
+        explanation: >-
+          There is no term in the normal approximation that would produce
+          this.
+
+  - id: q3
+    type: single
+    difficulty: medium
+    prompt: "Why is an offline LLM evaluation naturally a paired comparison?"
+    options:
+      - text: "Both systems are run over the same fixed item set, so every item yields a matched pair."
+        correct: true
+        explanation: >-
+          The stronger design comes for free. Analysing it as two independent
+          samples is a choice, and an expensive one.
+      - text: "Because the model is stochastic."
+        explanation: >-
+          Stochasticity is why you need statistics at all; it is not what
+          makes the design paired.
+      - text: "Because the items are drawn from the same distribution."
+        explanation: >-
+          Two independent samples from one distribution are still independent.
+          Pairing requires the *same items*, not the same distribution.
+      - text: "It is not; offline evaluation is unpaired by construction."
+        explanation: >-
+          The opposite is true, which is what makes the usual analysis a
+          missed opportunity.
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      Two prompt variants behave identically on 90% of items. At n = 200, the
+      unpaired test detects a real five-point improvement 9% of the time and
+      the paired test 80% of the time. Why does similarity help the paired
+      test so much?
+    options:
+      - text: "The items where they agree carry no information; pairing discards them as noise while the unpaired test counts them as data."
+        correct: true
+        explanation: >-
+          McNemar conditions on the disagreements. The more the two systems
+          agree, the more of the total variance is shared and irrelevant, and
+          the more pairing gains by removing it.
+      - text: "The paired test uses a lower significance threshold."
+        explanation: >-
+          Both use 1.96. The difference is in what enters the calculation, not
+          the bar it must clear.
+      - text: "The paired test has more data available to it."
+        explanation: >-
+          It has strictly less — only the discordant items. Less noise beats
+          more data here.
+      - text: "The unpaired test is only valid for continuous outcomes."
+        explanation: >-
+          It is perfectly valid for proportions; it is just the wrong design
+          for matched data.
+
+  - id: q5
+    type: multi
+    difficulty: hard
+    prompt: >-
+      On the same simulation, the unpaired test's false-alarm rate falls from
+      3.8% to 0.0% as the two systems become more alike, when it should sit at
+      5%. What follows?
+    options:
+      - text: "The test is miscalibrated on correlated data, not merely underpowered."
+        correct: true
+        explanation: >-
+          Treating correlated samples as independent overstates the standard
+          error of the difference, so the test under-rejects in both
+          directions.
+      - text: "It will almost never report a difference, whether or not one exists."
+        correct: true
+        explanation: >-
+          Which is the practical damage: a test that never rejects is
+          indistinguishable from a system that never improves.
+      - text: "Being conservative makes it the safer choice for a release gate."
+        explanation: >-
+          A gate that never fires is not safe, it is inert. It will also
+          never catch a regression, which is what gates are for.
+      - text: "The paired test is also affected, in the same direction."
+        explanation: >-
+          The paired test stays near 5% across every value tested - it is the
+          correctly specified one here.
+
+  - id: q6
+    type: single
+    difficulty: medium
+    prompt: >-
+      A colleague writes: \"no significant difference (p = 0.31), so the change
+      had no effect.\" What is missing?
+    options:
+      - text: "The power. Without it, 'we saw no difference' and 'we could not have seen this difference' are indistinguishable."
+        correct: true
+        explanation: >-
+          A null result is only informative if the study could plausibly have
+          detected the effect in question. State the smallest difference the
+          run could have found.
+      - text: "The exact p-value to more decimal places."
+        explanation: >-
+          More precision on a number that is already clearly above threshold
+          adds nothing.
+      - text: "A Bonferroni correction."
+        explanation: >-
+          Relevant when many comparisons are made, but it would only make the
+          null result more null. It is not what is missing.
+      - text: "Nothing; p = 0.31 is a clear null result."
+        explanation: >-
+          It is a clear failure to reject. Whether that is evidence of absence
+          depends entirely on the power, which is not reported.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: >-
+      Your held-out evaluation set may be inside the model's training corpus.
+      What is the appropriate response?
+    options:
+      - text: "Prefer items that could not have been memorised — recent, private, or synthetic — and state plainly what you cannot rule out."
+        correct: true
+        explanation: >-
+          You cannot inspect the corpus, so you cannot prove cleanliness. You
+          can choose items where contamination is implausible, and you can be
+          explicit about the residual risk.
+      - text: "Nothing can be done; contamination is unavoidable."
+        explanation: >-
+          Unavoidable in general, substantially reducible in practice through
+          item selection. Course IV makes it measurable.
+      - text: "Use a larger held-out set."
+        explanation: >-
+          A larger contaminated set is contaminated at scale. Size addresses
+          variance, not bias.
+      - text: "Shuffle the items before evaluating."
+        explanation: >-
+          Order has nothing to do with whether the content was memorised.
+
+  - id: q8
+    type: single
+    difficulty: hard
+    prompt: >-
+      A simulation supporting a claim was written twice and gave plausible but
+      wrong numbers both times. What is the general lesson?
+    options:
+      - text: "When a simulation is the evidence, the generative model is the claim, and it must be argued for explicitly."
+        correct: true
+        explanation: >-
+          Clipping probabilities to [0, 1] silently shrank the effect size;
+          drawing outcomes independently silently removed the correlation
+          pairing exists to exploit. Both produced tidy tables that were
+          simply about a different world.
+      - text: "Simulations should be avoided in favour of real measurements."
+        explanation: >-
+          Often impossible here, and the discipline of stating the generative
+          model is what makes a simulation checkable in a way a single
+          measurement is not.
+      - text: "More trials would have caught it."
+        explanation: >-
+          More trials reduce Monte Carlo noise. Neither error was noise; both
+          were the model being wrong, and more samples would have converged
+          more precisely on the wrong answer.
+      - text: "The tests should have been run on real data first."
+        explanation: >-
+          Reasonable in general, and it does not address the point: the bug
+          was in the assumptions, and assumptions have to be checked
+          separately from code.

@@ -1,0 +1,199 @@
+id: tok-l2
+lesson: modules/01-tokens/02-sampling
+title: "1.2 - Sampling"
+questions:
+  - id: q1
+    type: single
+    difficulty: easy
+    prompt: "Why subtract the maximum logit before exponentiating in a softmax?"
+    options:
+      - text: "`exp` of a few hundred overflows to infinity, and the constant cancels out of the ratio exactly."
+        correct: true
+        explanation: >-
+          Real logits routinely sit in the hundreds. Subtracting the max is
+          mathematically a no-op and numerically the difference between a
+          probability vector and a vector of `nan`.
+      - text: "It makes the distribution sharper."
+        explanation: >-
+          It changes nothing about the distribution. That is precisely why it
+          is safe to do.
+      - text: "It ensures the probabilities sum to 1."
+        explanation: >-
+          The division by the sum does that. The subtraction is about
+          overflow.
+      - text: "It is only needed when the temperature is below 1."
+        explanation: >-
+          A low temperature makes overflow *more* likely by scaling the logits
+          up, but the problem exists at any temperature with large logits.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      Probabilities are `[0.95, 0.03, 0.02]` and `top_p = 0.90`. Your filter
+      keeps tokens while the cumulative sum is strictly below `p`. What
+      happens?
+    options:
+      - text: "Nothing is kept, and renormalising divides by zero."
+        correct: true
+        explanation: >-
+          The first token already carries 0.95, so the strict test excludes
+          it and every one after. The token that crosses the threshold belongs
+          inside the nucleus.
+      - text: "Only the first token is kept, which is correct."
+        explanation: >-
+          That is the correct outcome, and a strict `cum < p` does not produce
+          it — 0.95 is not below 0.90.
+      - text: "All three are kept."
+        explanation: >-
+          Nothing in the rule would keep the tail once the threshold is
+          passed.
+      - text: "The behaviour depends on the sort order."
+        explanation: >-
+          The sort is descending in every implementation; the bug is in the
+          comparison, not the ordering.
+
+  - id: q3
+    type: numeric
+    difficulty: medium
+    answer: 6
+    tolerance: 1
+    prompt: >-
+      On the near-determined distribution in this lesson's experiment (top-1
+      probability about 61%), how many tokens does `top_p = 0.90` keep?
+    explanation: >-
+      Six. On the wide-open distribution the same setting keeps over thirty
+      thousand. `top_p` is a policy, not a budget — which is its advantage
+      over `top_k` and the reason you cannot reason about it as "roughly N
+      options".
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      Two libraries accept `temperature=0.7, top_p=0.9` and produce noticeably
+      different text from the same model. What is the most likely cause?
+    options:
+      - text: "They apply the two filters in different orders."
+        correct: true
+        explanation: >-
+          Measured on ordinary prose, temperature-first leaves a nucleus of 15
+          tokens and top-p-first leaves 2,171, with a total-variation distance
+          of about 0.095 between the resulting distributions.
+      - text: "One of them is using a different model version."
+        explanation: >-
+          Worth ruling out, and it is not needed to explain the difference —
+          the parameter order alone does it.
+      - text: "Floating-point differences between the two implementations."
+        explanation: >-
+          Real, and far too small to produce noticeably different text on its
+          own.
+      - text: "One is applying the temperature twice."
+        explanation: >-
+          Possible as a bug, but the ordinary, non-buggy difference in
+          application order is sufficient.
+
+  - id: q5
+    type: multi
+    difficulty: medium
+    prompt: >-
+      A repetition penalty of 1.2 is applied by dividing the token's logit by
+      1.2. Which statements are true?
+    options:
+      - text: "For a token with a negative logit, this makes it more likely."
+        correct: true
+        explanation: >-
+          Dividing −9 by 1.2 gives −7.5, which is larger. Measured, a token at
+          logit −9.07 became 4.53 times more likely.
+      - text: "Most logits in a real distribution are negative, so this is the normal case."
+        correct: true
+        explanation: >-
+          Which is what makes it a serious bug rather than a curiosity: the
+          parameter does the opposite of its name for nearly every token it
+          touches.
+      - text: "For a token with a positive logit, it works as intended."
+        correct: true
+        explanation: >-
+          Dividing a positive score shrinks it towards zero, which does reduce
+          the probability. The bug is asymmetric, which is why it survives
+          casual testing on the top token.
+      - text: "The bug can be fixed by using a penalty below 1."
+        explanation: >-
+          That inverts the problem rather than fixing it: negative logits
+          would then be penalised and positive ones rewarded.
+
+  - id: q6
+    type: single
+    difficulty: hard
+    prompt: >-
+      At `temperature=0.3` the argmax is chosen 92.7% of the time. Roughly what
+      fraction of 200-token responses match greedy decoding exactly?
+    options:
+      - text: "About 3 in 10 million — effectively never."
+        correct: true
+        explanation: >-
+          0.927 to the power of 200. Per-token agreement is a badly misleading
+          summary of sequence agreement, and it is where "low temperature is
+          basically deterministic" comes from.
+      - text: "About 93%, the same as the per-token rate."
+        explanation: >-
+          That would require the per-token rate to apply to the whole
+          sequence. Every position is another chance to diverge.
+      - text: "About 50%."
+        explanation: >-
+          Far too high; 0.927²⁰⁰ is nowhere near a half.
+      - text: "It cannot be estimated without knowing the model."
+        explanation: >-
+          It can be bounded well enough to make the point, which is that the
+          answer is nothing like 93%.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: >-
+      You set a provider-side `seed` and the same request still returns
+      different text. Which explanation is NOT available to you?
+    options:
+      - text: "The sampler drew different random numbers."
+        correct: true
+        explanation: >-
+          That is exactly what the seed fixes. Everything else — batch
+          composition, floating-point ordering, a model version change — is
+          untouched by it, which is why a seed buys less reproducibility than
+          the name suggests.
+      - text: "The request was batched with different neighbours."
+        explanation: >-
+          A live possibility: floating-point addition is not associative, so
+          batch composition can change the logits in the last bits.
+      - text: "The model version changed."
+        explanation: >-
+          A live possibility, and the reason lesson 0.1 insists on recording
+          the resolved version.
+      - text: "Floating-point ordering differed between runs."
+        explanation: >-
+          A live possibility, and not something a seed addresses.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      For an extraction task that must return one of five fixed labels, what
+      sampling configuration is appropriate?
+    options:
+      - text: "Temperature 0, and `logprobs` if available so you have a confidence signal."
+        correct: true
+        explanation: >-
+          There is no value in diversity here. The log-probability of the
+          chosen label is the cheapest abstention mechanism available, and it
+          costs nothing extra.
+      - text: "Temperature 0.7 with top-p 0.9, the general-purpose default."
+        explanation: >-
+          Defaults tuned for prose add variance to a task that wants none.
+      - text: "Temperature 0 with a repetition penalty, to avoid repeating labels."
+        explanation: >-
+          A repetition penalty across independent requests penalises exactly
+          the correct answer when it happens to recur.
+      - text: "High temperature with self-consistency voting."
+        explanation: >-
+          A legitimate technique for reasoning tasks, and expensive overkill
+          for picking one of five labels.

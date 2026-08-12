@@ -1,0 +1,152 @@
+id: tr-l5-slice
+title: "Slice the log"
+lesson: modules/00-transition/05-lab-demo-that-worked
+description: |
+  The aggregate cannot tell you which stage broke. Slicing can, and it is nine
+  lines.
+
+  Implement `success_by(records, key_fn)`, returning one entry per group:
+
+  ```
+  {"n": int, "ok": int, "rate": float, "lo": float, "hi": float}
+  ```
+
+  where `rate` is that group's own success rate and `(lo, hi)` is its Wilson
+  95% interval. A group of five items should come back with an interval wide
+  enough to tell you it is a group of five items.
+
+setup_code: |
+  from math import sqrt
+
+  Z95 = 1.959963984540054
+
+  def wilson(successes, n, z=Z95):
+      """Wilson score interval for a proportion, as a (lo, hi) pair.
+
+      Pass the GROUP's own size as `n`, not the size of the whole log - the
+      interval has to reflect how much data that group actually has. Clamped
+      to [0, 1]; returns (0.0, 1.0) when n is 0.
+      """
+      if n == 0:
+          return (0.0, 1.0)
+      p = successes / n
+      denom = 1 + z * z / n
+      centre = (p + z * z / (2 * n)) / denom
+      half = z * sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+      return (max(0.0, centre - half), min(1.0, centre + half))
+
+  def make_log():
+      """600 requests. A new model version reached 6% of traffic overnight."""
+      import random
+      rng = random.Random(20260809)
+      out = []
+      for _ in range(600):
+          new = rng.random() < 0.06
+          ok = rng.random() < (0.40 if new else 0.95)
+          out.append({
+              "model_version": "m-2026-08-01" if new else "m-2026-03-01",
+              "outcome": "ok" if ok else "error",
+          })
+      return out
+
+  LOG = make_log()
+
+provided:
+  LOG:
+    summary: >-
+      600 run records, each `{"model_version", "outcome"}`. A new model version
+      reached 6% of traffic overnight and is failing most of its requests; the
+      overall success rate is still 93%.
+    notes:
+      - "`outcome` is `\"ok\"` or `\"error\"`. Success means exactly `\"ok\"`."
+
+starter_code: |
+  def success_by(records, key_fn):
+      """Group by key_fn(record) and report each group's success rate."""
+      groups = {}
+      for r in records:
+          groups.setdefault(key_fn(r), []).append(r)
+
+      total = len(records)
+      out = {}
+      for key, rows in groups.items():
+          ok = sum(1 for r in rows if r["outcome"] == "ok")
+          rate = ok / total
+          lo, hi = wilson(ok, total)
+          out[key] = {"n": len(rows), "ok": ok, "rate": rate, "lo": lo, "hi": hi}
+      return out
+
+
+  overall = sum(1 for r in LOG if r["outcome"] == "ok") / len(LOG)
+  print(f"overall success {overall:.1%}")
+  for key, s in sorted(success_by(LOG, lambda r: r["model_version"]).items()):
+      print(f"  {key}  n={s['n']:>3}  {s['rate']:6.1%}  [{s['lo']:.2f}, {s['hi']:.2f}]")
+
+tests: |
+  by_version = success_by(LOG, lambda r: r["model_version"])
+  assert set(by_version) == {"m-2026-03-01", "m-2026-08-01"}
+
+  old = by_version["m-2026-03-01"]
+  new = by_version["m-2026-08-01"]
+
+  assert old["n"] + new["n"] == len(LOG), "every record belongs to exactly one group"
+
+  assert 0.90 < old["rate"] < 0.99, (
+      f"the healthy version's rate came out as {old['rate']:.3f}. A group's rate "
+      "is its own successes over its own size - dividing by the size of the whole "
+      "log gives you each group's share of total successes, which is a different "
+      "quantity and always sums to the overall rate."
+  )
+  assert 0.25 < new["rate"] < 0.60, f"the new version's rate came out as {new['rate']:.3f}"
+
+  assert old["rate"] - new["rate"] > 0.35, "the two versions should be far apart"
+
+  # The intervals have to reflect each group's own sample size, so the small
+  # group's interval is much wider than the large one's.
+  assert (new["hi"] - new["lo"]) > 2 * (old["hi"] - old["lo"]), (
+      "the smaller group's interval should be substantially wider; if both "
+      "intervals are the same width you passed the whole log's size to wilson()"
+  )
+  assert new["lo"] <= new["rate"] <= new["hi"]
+  assert old["lo"] <= old["rate"] <= old["hi"]
+
+  # The failure is invisible in the aggregate, which is the entire point.
+  overall = sum(1 for r in LOG if r["outcome"] == "ok") / len(LOG)
+  assert overall > 0.90, f"overall rate is {overall:.3f}; the dashboard is green"
+  assert new["hi"] < old["lo"], (
+      "the two intervals should not overlap - sliced, this is an unmistakable "
+      "signal; aggregated, it is a 91% success rate and nobody is paged"
+  )
+
+  # Any key function must work, including one that produces a single group.
+  one = success_by(LOG, lambda r: "all")
+  assert one["all"]["n"] == len(LOG)
+  assert abs(one["all"]["rate"] - overall) < 1e-9
+
+  empty = success_by([], lambda r: r["model_version"])
+  assert empty == {}, "an empty log has no groups"
+
+hints:
+  - "The grouping is already right. Look at what each group's rate is divided by."
+  - "`rate` is `ok / len(rows)`, not `ok / total`."
+  - "`wilson` needs the group's own size too — pass `len(rows)`, not `total`."
+
+solution: |
+  def success_by(records, key_fn):
+      groups = {}
+      for r in records:
+          groups.setdefault(key_fn(r), []).append(r)
+
+      out = {}
+      for key, rows in groups.items():
+          n = len(rows)
+          ok = sum(1 for r in rows if r["outcome"] == "ok")
+          lo, hi = wilson(ok, n)
+          out[key] = {"n": n, "ok": ok, "rate": ok / n, "lo": lo, "hi": hi}
+      return out
+
+
+  overall = sum(1 for r in LOG if r["outcome"] == "ok") / len(LOG)
+  print(f"overall success {overall:.1%}")
+  for key, s in sorted(success_by(LOG, lambda r: r["model_version"]).items()):
+      print(f"  {key}  n={s['n']:>3}  {s['rate']:6.1%}  [{s['lo']:.2f}, {s['hi']:.2f}]")

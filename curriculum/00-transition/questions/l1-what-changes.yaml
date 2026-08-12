@@ -1,0 +1,203 @@
+id: tr-l1
+lesson: modules/00-transition/01-what-changes
+title: "0.1 - What changes"
+questions:
+  - id: q1
+    type: single
+    difficulty: easy
+    prompt: >-
+      You set `temperature=0` and the same prompt still returns two different
+      answers. What is the most likely explanation?
+    options:
+      - text: "Greedy decoding is not the same as deterministic execution; batched floating-point arithmetic is not reproducible across differing batch composition."
+        correct: true
+        explanation: >-
+          Floating-point addition is not associative, so the same logits
+          computed alongside different neighbouring requests can differ in the
+          last bits - occasionally enough to change which token wins.
+      - text: "The temperature parameter was silently ignored."
+        explanation: >-
+          Possible but much less common than the arithmetic explanation, and
+          easy to rule out by checking what the provider echoed back.
+      - text: "Temperature zero still samples, just from a narrower distribution."
+        explanation: >-
+          Temperature zero is defined as taking the argmax, not sampling from a
+          narrow distribution. The nondeterminism comes from elsewhere.
+      - text: "The model is retrained continuously."
+        explanation: >-
+          Models are not retrained between your two requests. Versions change
+          on a release schedule, which is a different problem with a different
+          fix - version pinning.
+
+  - id: q2
+    type: multi
+    difficulty: medium
+    prompt: "Which of these must be recorded for a result to be reproducible later?"
+    options:
+      - text: "The resolved model version, not the alias requested."
+        correct: true
+        explanation: >-
+          An alias can point somewhere else next month. If the provider does
+          not resolve it for you, record the date and treat the boundary as
+          unknown.
+      - text: "Every decoding parameter, including defaults you did not set."
+        correct: true
+        explanation: >-
+          A default you never chose is still a parameter you depended on, and
+          defaults change.
+      - text: "A hash of the fully rendered prompt."
+        correct: true
+        explanation: >-
+          The template plus the variables is not enough - rendering logic
+          changes too, and then you cannot reconstruct what was sent.
+      - text: "The wall-clock time the request was made."
+        correct: true
+        explanation: >-
+          Useful precisely because everything else can change underneath you;
+          when a version is not reported, the timestamp is your only handle on
+          which era a result belongs to.
+
+  - id: q3
+    type: single
+    difficulty: medium
+    prompt: >-
+      A model refuses to answer 4% of your requests. Where should those
+      refusals be counted?
+    options:
+      - text: "In quality metrics. A refusal is a successful call with an unwanted output."
+        correct: true
+        explanation: >-
+          Counting it as an error hides it in reliability dashboards, where
+          nobody looks for quality problems, and makes your error rate look
+          like an infrastructure issue.
+      - text: "In reliability metrics, alongside timeouts and 5xx responses."
+        explanation: >-
+          The call succeeded. Grouping refusals with infrastructure failures
+          sends the investigation to the wrong team.
+      - text: "Nowhere; refusals are the provider's business."
+        explanation: >-
+          They are your users' experience, which makes them your business
+          whoever caused them.
+      - text: "In cost metrics only."
+        explanation: >-
+          They do cost money, but the reason to track them is that they are
+          answers your users did not get.
+
+  - id: q4
+    type: numeric
+    difficulty: medium
+    answer: 1.25
+    tolerance: 0.02
+    prompt: >-
+      A call fails 20% of the time, independently. With a retry limit of 3,
+      how many attempts does each *successful* request cost on average? (Two
+      decimal places.)
+    explanation: >-
+      (1 - 0.2**3) / (1 - 0.2) = 1.24 attempts per request, divided by a
+      99.2% success rate, gives 1.25. The limit cancels out of this
+      expression entirely - 1 / (1 - f) - so the answer is the same for a
+      limit of 3 or 30.
+
+  - id: q5
+    type: single
+    difficulty: hard
+    prompt: >-
+      Following on: your finance team wants the retry-related spend reduced.
+      What actually works?
+    options:
+      - text: "Reduce the failure rate. Cost per success depends only on f, not on the retry limit."
+        correct: true
+        explanation: >-
+          Since attempts per success is 1/(1-f), the retry limit is not a cost
+          lever at all. Fixing the cause of failures is the only one.
+      - text: "Lower the retry limit from 3 to 1."
+        explanation: >-
+          That reduces total spend only by abandoning requests - your success
+          rate falls and the cost per success is unchanged. You bought the
+          saving from your users.
+      - text: "Add exponential backoff between attempts."
+        explanation: >-
+          Backoff helps a struggling provider recover and is good practice,
+          but it changes when attempts happen, not how many succeed.
+      - text: "Cache failed responses so retries are free."
+        explanation: >-
+          Caching a failure means returning it again. The attempt that
+          produced it was already billed.
+
+  - id: q6
+    type: single
+    difficulty: easy
+    prompt: >-
+      Which of your existing habits is the most valuable thing you bring to
+      this work?
+    options:
+      - text: "Refusing to trust a number without knowing its sample size."
+        correct: true
+        explanation: >-
+          Evaluation sets here are small and expensive, so this instinct is
+          worth more than it was, not less. Lesson 0.3 points it at the right
+          target.
+      - text: "Feature engineering."
+        explanation: >-
+          There are no features to engineer at this level. What replaces it -
+          context construction - is a different skill covered in Module 3.
+      - text: "Hyperparameter tuning."
+        explanation: >-
+          There are a handful of decoding parameters and they are not where
+          the wins are.
+      - text: "Model selection by cross-validation."
+        explanation: >-
+          You cannot refit, so there is nothing to cross-validate in the usual
+          sense. Comparing systems is a paired-test problem instead.
+
+  - id: q7
+    type: multi
+    difficulty: medium
+    prompt: >-
+      Two results were measured six weeks apart on the same 200 items with the
+      same prompt. Which claims are unsafe?
+    options:
+      - text: "\"The prompt change improved accuracy by 4 points.\""
+        correct: true
+        explanation: >-
+          Unsafe on two counts at once: the model may have changed underneath,
+          and 4 points on 200 items is inside the noise anyway.
+      - text: "\"The system scored 84% in August.\""
+        explanation: >-
+          Safe as a statement about August, provided the interval is given
+          alongside it. It is a measurement, not a comparison.
+      - text: "\"The August system is better than the June system.\""
+        correct: true
+        explanation: >-
+          The comparison confounds your change with any provider change. You
+          cannot separate them after the fact without re-running June's
+          configuration.
+      - text: "\"The two runs used the same 200 items.\""
+        explanation: >-
+          A statement of fact about your own harness, and a useful one - it is
+          what makes a paired analysis possible.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why does a response cache make development misleading?
+    options:
+      - text: "It makes a stochastic system look deterministic until it reaches production."
+        correct: true
+        explanation: >-
+          Every repeat request during development returns the cached answer,
+          so the variance you will actually face never shows up until real
+          traffic arrives with cold keys.
+      - text: "It makes the system slower."
+        explanation: >-
+          It makes it faster, which is part of why the illusion is so
+          comfortable.
+      - text: "It invalidates the token counts."
+        explanation: >-
+          Token counts stay correct for the underlying call; the cache changes
+          how often you make one.
+      - text: "It prevents version pinning."
+        explanation: >-
+          The two are independent, though a cache that outlives a version
+          change will happily serve you answers from the old model.

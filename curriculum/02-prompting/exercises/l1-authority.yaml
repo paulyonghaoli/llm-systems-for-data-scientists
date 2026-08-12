@@ -1,0 +1,113 @@
+id: prm-l1-authority
+title: "Authority comes from the caller"
+lesson: modules/02-prompting/01-instruction-structure
+description: |
+  A request reaches your tool layer. Decide whether to run it.
+
+  Every request carries an **origin** — where the instruction actually came
+  from — and a record of which sources appeared in the prompt. Only the origin
+  may grant authority. "A system message was present in the prompt" is not
+  authentication; it describes the *page*, not the *author*.
+
+  Implement `authorize(request)`:
+
+  | Source | Level |  | Action | Requires |
+  |---|---|---|---|---|
+  | `system` | 3 |  | `answer` | 0 |
+  | `user` | 2 |  | `search` | 1 |
+  | `retrieved` | 1 |  | `send_email` | 2 |
+  | `tool_output` | 1 |  | `change_settings` | 3 |
+
+  Permit when the origin's level is at least the action's requirement. Anything
+  unrecognised — an unknown source, an unknown action — is **denied**.
+
+setup_code: |
+  SOURCE_LEVEL = {"system": 3, "user": 2, "retrieved": 1, "tool_output": 1}
+  ACTION_LEVEL = {"answer": 0, "search": 1, "send_email": 2, "change_settings": 3}
+
+  def request(action, origin, prompt_sources=("system", "user", "retrieved")):
+      return {"action": action, "origin": origin, "prompt_sources": list(prompt_sources)}
+
+  CASES = [
+      (request("answer", "retrieved"), "a document asking to answer"),
+      (request("search", "retrieved"), "a document asking to search"),
+      (request("send_email", "retrieved"), "a document asking to send email"),
+      (request("send_email", "user"), "the user asking to send email"),
+      (request("change_settings", "user"), "the user changing settings"),
+      (request("change_settings", "system"), "the operator changing settings"),
+  ]
+
+starter_code: |
+  def authorize(req):
+      """Return True if the request may run."""
+      levels = [SOURCE_LEVEL.get(s, 0) for s in req["prompt_sources"]]
+      granted = max(levels) if levels else 0
+      return granted >= ACTION_LEVEL.get(req["action"], 0)
+
+
+  for req, label in CASES:
+      print(f"{'ALLOW' if authorize(req) else 'deny ':<6} {label}")
+
+tests: |
+  # The case the whole lesson is about: a retrieved document asks for an
+  # action it is not entitled to, in a prompt that also contained a system
+  # message and a user turn.
+  attack = request("send_email", "retrieved")
+  assert authorize(attack) is False, (
+      "a retrieved document was allowed to send email. Its request travelled in "
+      "a prompt that also contained system and user messages, but those describe "
+      "the page the instruction was written on, not who wrote it. Authority comes "
+      "from `origin` and from nothing else."
+  )
+  assert authorize(request("change_settings", "retrieved")) is False
+  assert authorize(request("change_settings", "tool_output")) is False
+
+  # Retrieved content may still do low-authority things.
+  assert authorize(request("answer", "retrieved")) is True
+  assert authorize(request("search", "retrieved")) is True
+
+  # The authenticated user has real, and bounded, authority.
+  assert authorize(request("send_email", "user")) is True
+  assert authorize(request("change_settings", "user")) is False, (
+      "the user is not the operator; changing settings requires system authority"
+  )
+  assert authorize(request("change_settings", "system")) is True
+
+  # Trimming the prompt must not change any decision - the sources present are
+  # irrelevant to authorisation.
+  for action in ACTION_LEVEL:
+      for origin in SOURCE_LEVEL:
+          rich = request(action, origin, ("system", "user", "retrieved", "tool_output"))
+          bare = request(action, origin, ())
+          assert authorize(rich) == authorize(bare), (
+              f"{origin} -> {action}: the decision changed when prompt_sources "
+              "changed, so something other than the origin is granting authority"
+          )
+
+  # Fail closed on anything unrecognised.
+  assert authorize(request("answer", "anonymous")) is False, (
+      "an unknown origin was granted level 0 and 'answer' needs level 0, so it "
+      "slipped through. An unrecognised source must be denied outright rather "
+      "than defaulted to the bottom of the lattice."
+  )
+  assert authorize(request("delete_everything", "user")) is False, (
+      "an unknown action must be denied; a missing entry is not a requirement of 0"
+  )
+  assert authorize(request("delete_everything", "system")) is False
+
+hints:
+  - "`prompt_sources` should not appear in your implementation at all."
+  - "Look up `req['origin']` in SOURCE_LEVEL, and require that both the source and the action are known before comparing levels."
+  - "`.get(x, 0)` is what makes unknown values slip through — an unknown action gets requirement 0 and is permitted. Check membership explicitly."
+
+solution: |
+  def authorize(req):
+      origin = req["origin"]
+      action = req["action"]
+      if origin not in SOURCE_LEVEL or action not in ACTION_LEVEL:
+          return False
+      return SOURCE_LEVEL[origin] >= ACTION_LEVEL[action]
+
+
+  for req, label in CASES:
+      print(f"{'ALLOW' if authorize(req) else 'deny ':<6} {label}")

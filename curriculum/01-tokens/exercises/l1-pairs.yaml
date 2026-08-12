@@ -1,0 +1,93 @@
+id: tok-l1-pairs
+title: "Count the pairs"
+lesson: modules/01-tokens/01-bpe
+description: |
+  BPE's inner loop asks one question: which two adjacent symbols occur
+  together most often? Write the counter.
+
+  The chunks come from the pre-tokenizer, and **pairs must never be counted
+  across a chunk boundary**. If they are, the algorithm cheerfully learns a
+  token for the end of one word plus the start of the next.
+
+setup_code: |
+  import re
+  from collections import Counter
+
+  SPLIT = re.compile(
+      r"'(?:s|t|re|ve|m|ll|d)"
+      r"| ?[^\W\d_]+"
+      r"| ?\d+"
+      r"| ?[^\s\w]+"
+      r"|\s+(?!\S)"
+      r"|\s+"
+      r"|[\s\S]"
+  )
+
+  def pretokenize(text):
+      """Split text into chunks that merges may not cross."""
+      return SPLIT.findall(text)
+
+  def as_chunks(text):
+      """Pre-tokenize, then turn each chunk into a list of byte values."""
+      return [list(chunk.encode("utf-8")) for chunk in pretokenize(text)]
+
+starter_code: |
+  def pair_counts(chunks):
+      """Count how often each adjacent pair occurs.
+
+      `chunks` is a list of lists of ints, e.g. [[116, 104, 101], [32, 99]].
+      Return a Counter mapping (int, int) -> count.
+      """
+      flat = [i for ids in chunks for i in ids]
+      counts = Counter()
+      for pair in zip(flat, flat[1:]):
+          counts[pair] += 1
+      return counts
+
+
+  print(pair_counts(as_chunks("the the")))
+
+tests: |
+  # Chosen so the boundary pair (3, 4) appears nowhere inside a chunk: if it
+  # is counted at all, it was counted across the gap.
+  c = pair_counts([[1, 2, 3], [4, 1, 2]])
+
+  assert c[(1, 2)] == 2, f"(1, 2) occurs in both chunks, expected 2, got {c[(1, 2)]}"
+  assert c[(2, 3)] == 1, f"expected (2, 3) once, got {c[(2, 3)]}"
+  assert c[(4, 1)] == 1, f"expected (4, 1) once, got {c[(4, 1)]}"
+
+  assert c[(3, 4)] == 0, (
+      "A pair was counted across a chunk boundary. (3, 4) is the last symbol of "
+      "the first chunk followed by the first symbol of the second, and those are "
+      "never adjacent as far as BPE is concerned - that is the entire job of the "
+      "pre-tokenizer. Count pairs inside each chunk separately."
+  )
+
+  assert c[(1, 1)] == 0, "(1, 1) never occurs; counters should not invent it"
+
+  # Single-symbol chunks contribute no pairs at all.
+  assert sum(pair_counts([[7], [8], [9]]).values()) == 0
+
+  # And on real text: 'the the' pre-tokenizes to ['the', ' the'], so the pair
+  # ('e', ' ') spans the boundary and must not be counted.
+  real = pair_counts(as_chunks("the the"))
+  assert real[(ord("t"), ord("h"))] == 2, "'th' occurs twice in 'the the'"
+  assert real[(ord("e"), ord(" "))] == 0, (
+      "('e', ' ') was counted, but it spans the gap between 'the' and ' the'"
+  )
+
+hints:
+  - "Do not flatten the chunks together. Loop over `chunks`, and count pairs within each one."
+  - "`zip(ids, ids[1:])` gives you every adjacent pair of a single chunk."
+  - "Start with `counts = Counter()`, then `for ids in chunks:` and count inside that loop."
+
+solution: |
+  def pair_counts(chunks):
+      counts = Counter()
+      for ids in chunks:
+          for pair in zip(ids, ids[1:]):
+              counts[pair] += 1
+      return counts
+
+
+  print(pair_counts(as_chunks("the the")))

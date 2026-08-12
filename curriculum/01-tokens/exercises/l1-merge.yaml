@@ -1,0 +1,79 @@
+id: tok-l1-merge
+title: "Apply one merge"
+lesson: modules/01-tokens/01-bpe
+description: |
+  You have found the most frequent pair. Now replace every occurrence of it
+  with a single new symbol.
+
+  This is four lines of code and it has one famous bug. `[1, 1, 1]` with the
+  pair `(1, 1)` has two *overlapping* occurrences and only one of them can be
+  taken — the correct answer is `[9, 1]`, not `[9, 9]` and not `[9, 1, 1]`.
+
+setup_code: |
+  pass
+
+starter_code: |
+  def merge(ids, pair, new_id):
+      """Replace every non-overlapping occurrence of `pair` with `new_id`.
+
+      ids     list[int]        e.g. [116, 104, 101]
+      pair    tuple[int, int]  the pair to replace
+      new_id  int              the symbol to replace it with
+      """
+      out = []
+      for i, current in enumerate(ids):
+          if i + 1 < len(ids) and (ids[i], ids[i + 1]) == pair:
+              out.append(new_id)
+          else:
+              out.append(current)
+      return out
+
+
+  print(merge([116, 104, 101], (116, 104), 256))
+
+tests: |
+  assert merge([1, 2, 3], (1, 2), 9) == [9, 3], (
+      f"merge([1, 2, 3], (1, 2), 9) gave {merge([1, 2, 3], (1, 2), 9)}. "
+      "Replacing a pair consumes BOTH of its symbols, so the result is shorter "
+      "than the input."
+  )
+
+  assert merge([1, 1, 1], (1, 1), 9) == [9, 1], (
+      f"merge([1, 1, 1], (1, 1), 9) gave {merge([1, 1, 1], (1, 1), 9)}. "
+      "The three 1s contain two overlapping occurrences of (1, 1) and only the "
+      "first may be taken; the third 1 has nothing left to pair with."
+  )
+
+  assert merge([1, 1, 1, 1], (1, 1), 9) == [9, 9]
+  assert merge([5, 1, 2, 5, 1, 2], (1, 2), 9) == [5, 9, 5, 9]
+
+  assert merge([1, 2], (3, 4), 9) == [1, 2], "a pair that never occurs changes nothing"
+  assert merge([], (1, 2), 9) == [], "the empty sequence is a valid input"
+  assert merge([7], (7, 7), 9) == [7], "a single symbol cannot form a pair"
+
+  # The invariant that matters downstream: a merge always shortens the
+  # sequence by exactly the number of replacements it made.
+  before = [1, 2, 1, 2, 1]
+  after = merge(before, (1, 2), 9)
+  assert len(after) == len(before) - 2, f"expected two replacements, got {after}"
+
+hints:
+  - "`for i, x in enumerate(ids)` cannot work: after a match you need to skip TWO positions, and a `for` loop will not let you."
+  - "Use a `while i < len(ids)` loop so you control the increment yourself."
+  - "On a match: append `new_id` and do `i += 2`. Otherwise append `ids[i]` and do `i += 1`."
+
+solution: |
+  def merge(ids, pair, new_id):
+      out = []
+      i = 0
+      while i < len(ids):
+          if i + 1 < len(ids) and ids[i] == pair[0] and ids[i + 1] == pair[1]:
+              out.append(new_id)
+              i += 2
+          else:
+              out.append(ids[i])
+              i += 1
+      return out
+
+
+  print(merge([116, 104, 101], (116, 104), 256))

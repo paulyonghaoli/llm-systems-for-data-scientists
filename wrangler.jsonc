@@ -1,0 +1,14 @@
+// Cloudflare Workers static-assets deployment (soft launch).
+// `mkdocs build` produces ./site; wrangler uploads it as static assets —
+// there is no Worker code, so nothing runs server-side and nothing can.
+//
+// Deploy is deliberately manual:
+//     python tools/verify.py && .venv/Scripts/mkdocs build && npx wrangler deploy
+{
+  "name": "llm-systems-for-data-scientists",
+  "compatibility_date": "2026-08-11",
+  "assets": {
+    "directory": "./site",
+    "not_found_handling": "404-page"
+  }
+}
