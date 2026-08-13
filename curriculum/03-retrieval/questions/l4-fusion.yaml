@@ -1,0 +1,278 @@
+id: ret-l4
+lesson: modules/03-retrieval/04-hybrid-fusion
+title: "3.4 - Hybrid fusion and RRF"
+questions:
+  - id: q1
+    type: single
+    difficulty: medium
+    prompt: >-
+      Reciprocal rank fusion with k = 60 and equal weights scored 0.642 against
+      0.705 for the lexical retriever alone. What explains fusion being worse
+      than one of its own inputs?
+    options:
+      - text: "RRF weights both retrievers equally, so the weaker one's confident wrong answers get the same voice as the stronger one's correct answers."
+        correct: true
+        explanation: >-
+          Equal weighting is an assumption that the retrievers are comparably
+          good. Here one is 9 points better than the other, and a fair vote
+          between an expert and an amateur is worse than the expert.
+      - text: "The dense retriever's scores were on a different scale from BM25's."
+        explanation: >-
+          RRF never looks at scores — only ranks. Scale incompatibility is the
+          problem RRF exists to avoid, and it is why score normalisation is the
+          fragile alternative.
+      - text: "The candidate lists were too shallow to fuse."
+        explanation: >-
+          They were 100 deep per retriever, which is why the union ceiling
+          reaches 0.858. Depth bounds the ceiling and is not what went wrong
+          here.
+      - text: "Fusion always costs some precision to gain recall."
+        explanation: >-
+          There is no such general law, and the tuned configuration improved
+          on both inputs. The default's failure is specific to its parameters.
+
+  - id: q2
+    type: single
+    difficulty: hard
+    prompt: >-
+      Why does the rank constant k = 1 behave so differently from k = 60?
+    options:
+      - text: "It changes what fusion rewards: large k rewards appearing in both lists, small k rewards being ranked first in either."
+        correct: true
+        explanation: >-
+          At k = 60 the whole top twenty is worth within thirty per cent of the
+          same amount, so position hardly matters and agreement decides. At
+          k = 1 rank 1 is worth ten times rank 20. It selects between two
+          different algorithms rather than smoothing one.
+      - text: "Small k makes the scores larger, so they dominate the sum."
+        explanation: >-
+          Absolute magnitude is irrelevant — only the ordering of fused scores
+          matters, and scaling every term by a constant would change nothing.
+      - text: "k = 1 effectively disables the dense retriever."
+        explanation: >-
+          Both runs still contribute at every rank. What changes is how sharply
+          each run's own top positions are favoured.
+      - text: "k must exceed the number of retrievers for the formula to be defined."
+        explanation: >-
+          The formula is defined for any positive k. The rank starts at 1, so
+          the denominator is never zero.
+
+  - id: q3
+    type: single
+    difficulty: hard
+    prompt: >-
+      The best of 25 configurations scored 0.778 in-sample, winning 13 queries
+      and losing 0 at p = 0.0002. Held out, the same tuning procedure scored
+      0.750, winning 14 and losing 6 at p = 0.1153. Which is the number to
+      report?
+    options:
+      - text: "0.750, and the honest conclusion is that fusion was not demonstrated to beat the lexical retriever on this benchmark."
+        correct: true
+        explanation: >-
+          The 0.778 was chosen from 25 candidates on the queries it is scored
+          on, which is the retrieval equivalent of reporting training accuracy.
+          Held out, the direction is encouraging and the split is not
+          significant. "Probably helping, cannot show it here" is the finding.
+      - text: "0.778, since it is a real measurement on real queries with a real p-value."
+        explanation: >-
+          It is a real measurement of the wrong quantity. Selecting the maximum
+          of 25 noisy estimates and reporting that maximum is biased upward by
+          construction — measured here at 2.8 points.
+      - text: "The average of the two, since both are informative."
+        explanation: >-
+          Averaging a biased estimate with an unbiased one produces a biased
+          estimate. The held-out number already uses all the data, through two
+          folds.
+      - text: "0.858, the union ceiling, since that is what fusion is aiming at."
+        explanation: >-
+          The ceiling assumes an oracle that knows which retriever to trust per
+          query. It bounds what is possible and is not achieved by anything
+          measured here.
+
+  - id: q4
+    type: multi
+    difficulty: medium
+    prompt: >-
+      Which of these are true of the union ceiling (0.858) reported for these
+      two retrievers?
+    options:
+      - text: "It assumes a per-query oracle that knows which retriever to trust."
+        correct: true
+        explanation: >-
+          It counts a query as answered if *either* retriever found it, which
+          requires knowing which one did. No fixed weighting can be that
+          oracle — which is the job description for a reranker.
+      - text: "It bounds what any fusion of these two candidate lists can achieve."
+        correct: true
+        explanation: >-
+          Fusion re-orders what it is given, so a document neither retriever
+          retrieved cannot appear. Deepening the candidate lists raises the
+          ceiling; changing the fusion rule cannot.
+      - text: "Tuned fusion captured under a third of the gap between it and the better retriever."
+        correct: true
+        explanation: >-
+          29% of the headroom, held out. Most of what the two retrievers know
+          between them is still not reachable by a fixed combination of them.
+      - text: "It is the score a well-tuned RRF should be expected to reach."
+        explanation: >-
+          Nothing measured here comes close, and no fixed-weight rule should be
+          expected to, since the ceiling requires per-query knowledge that a
+          fixed rule does not have.
+      - text: "It would be unchanged by fusing deeper candidate lists."
+        explanation: >-
+          It rises with depth: more candidates means more queries where at
+          least one retriever has the answer somewhere in its list.
+
+  - id: q5
+    type: single
+    difficulty: medium
+    prompt: >-
+      An implementation counts ranks from 0 rather than 1. When does this bug
+      show up?
+    options:
+      - text: "Only once someone lowers k — at k = 60 it is invisible, at k = 1 it reorders the results."
+        correct: true
+        explanation: >-
+          The top document's contribution moves from w/(k+1) to w/k: at k = 60
+          that is 1/60 against 1/61, and at k = 1 it is a fifty per cent error
+          on the largest term in the sum. It presents as "tuning made things
+          worse", which sends you looking in the wrong place.
+      - text: "Immediately, since every score is wrong."
+        explanation: >-
+          Every score is wrong, and at the default the *ranking* is not — which
+          is all that matters. A bug that changes no output is not observable.
+      - text: "Only when a document appears in both runs."
+        explanation: >-
+          It affects every document. Documents in both runs are affected twice.
+      - text: "Never, since adding a constant to all ranks cannot change the order."
+        explanation: >-
+          It is not a constant shift of the scores. `1/(k+r)` is non-linear in
+          r, so shifting r changes the relative weights of different ranks.
+
+  - id: q6
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why does RRF ignore the retrievers' scores rather than normalising and
+      adding them?
+    options:
+      - text: "The scores live on incomparable scales with no principled conversion, and rank is the one thing both retrievers agree on the meaning of."
+        correct: true
+        explanation: >-
+          BM25 scores are unbounded sums over query terms; cosine similarities
+          sit in a narrow band near 0.65. Normalising each to its observed range
+          is sensitive to outliers and to how deep a list you took, and it still
+          asserts that the top of one list means what the top of the other does.
+      - text: "Rank-based fusion is always more accurate than score-based fusion."
+        explanation: >-
+          It is more robust, not uniformly more accurate. Discarding scores also
+          discards the information that would say which retriever to trust —
+          which is what the weighting has to put back by hand.
+      - text: "Because scores are not available from most retrieval APIs."
+        explanation: >-
+          They generally are. The problem is what they mean, not whether you
+          can get them.
+      - text: "Because normalised scores cannot be summed across retrievers."
+        explanation: >-
+          They can be summed; the question is whether the sum means anything.
+
+  - id: q7
+    type: numeric
+    difficulty: easy
+    prompt: >-
+      Under RRF with k = 60, what does a document ranked 1st in one run
+      contribute to its fused score, with a weight of 1? Give the answer to
+      four decimal places.
+    answer: 0.0164
+    tolerance: 0.0005
+    explanation: >-
+      1 / (60 + 1) = 0.01639. Compare rank 20, which contributes 1/80 =
+      0.0125 — within thirty per cent. That narrow spread is exactly why a
+      large k makes fusion reward appearing in both lists rather than being
+      ranked highly in either.
+  - id: q8
+    type: single
+    difficulty: hard
+    prompt: >-
+      Lesson 3.3 measured that 22 queries are answered only by lexical
+      retrieval and 33 only by dense. What does that establish about fusion?
+    options:
+      - text: "That fusion could help — it is a necessary condition, not a sufficient one."
+        correct: true
+        explanation: >-
+          Complementarity creates headroom; it says nothing about whether a
+          fixed combining rule can reach it. Here the headroom was 15.3 points
+          and the tuned rule captured 29% of it, with the default capturing
+          less than nothing.
+      - text: "That fusion will improve recall, since the errors are uncorrelated."
+        explanation: >-
+          This is the inference the lesson exists to block. Uncorrelated errors
+          are what makes a gain *possible*; realising it requires knowing which
+          retriever to believe on each query.
+      - text: "That the two retrievers should be given equal weight."
+        explanation: >-
+          The measured overall recalls differ by 9 points, and equal weighting
+          was the configuration that performed worst.
+      - text: "That the dense retriever should be dropped, since it answers fewer queries alone."
+        explanation: >-
+          It answers 33 queries the lexical retriever misses. Dropping it
+          removes the headroom entirely.
+
+  - id: q9
+    type: single
+    difficulty: medium
+    prompt: >-
+      Your labelled query set has 40 queries and you want to tune fusion
+      parameters. What should you do?
+    options:
+      - text: "Either split it and accept a noisy held-out estimate, or ship the better single retriever and go and label more queries."
+        correct: true
+        explanation: >-
+          A set too small to split is a set too small to tune on. Tuning on all
+          40 and reporting the result produces a number that means nothing, and
+          the measured optimism on 176 queries was already 2.8 points.
+      - text: "Tune on all 40 and report the best score, noting the small sample."
+        explanation: >-
+          The note does not fix the bias. The reported number is the maximum of
+          many noisy estimates, which is biased upward regardless of what the
+          caption says.
+      - text: "Use cross-validation to tune, then report the best fold's score."
+        explanation: >-
+          Reporting the best fold reintroduces exactly the selection bias the
+          folds were meant to remove. Report the mean across held-out folds.
+      - text: "Use the library default, since 40 queries cannot justify any change."
+        explanation: >-
+          Defensible as a fallback, but this lesson measured the default as
+          actively worse than one of its inputs — so it deserves checking even
+          when you cannot tune.
+
+  - id: q10
+    type: single
+    difficulty: hard
+    prompt: >-
+      Both cross-validation folds independently chose k = 1, but one chose a
+      lexical weight of 0.7 and the other 0.6, with held-out scores of 0.784
+      and 0.716. What do you take from that?
+    options:
+      - text: "k = 1 is a stable finding; the exact weight is not, and the seven-point spread shows how much this query set can resolve."
+        correct: true
+        explanation: >-
+          Agreement across folds is evidence a parameter matters; disagreement
+          is evidence the benchmark cannot distinguish nearby values. The spread
+          between two halves of the same benchmark is a direct measure of its
+          resolution.
+      - text: "The tuning is unreliable and both parameters should be left at their defaults."
+        explanation: >-
+          The k finding replicated across independent halves, and the default
+          k = 60 was measured as clearly worse. Discarding a replicated result
+          because a second parameter was unstable throws away the reliable part.
+      - text: "The weight should be set to 0.65, the average of the two."
+        explanation: >-
+          Averaging two selections made on noise produces a third value chosen
+          on noise. If the benchmark cannot distinguish 0.6 from 0.7, it cannot
+          endorse 0.65 either.
+      - text: "The second fold's queries must be harder."
+        explanation: >-
+          The lexical baseline scored 0.705 on both halves, so overall
+          difficulty is matched. The spread is in what fusion achieved, not in
+          the queries.

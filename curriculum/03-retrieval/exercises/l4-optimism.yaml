@@ -1,0 +1,135 @@
+id: ret-l4-optimism
+title: "Measure what tuning on the test set costs you"
+lesson: modules/03-retrieval/04-hybrid-fusion
+description: |
+  Four fusion configurations have been scored on the same twenty queries.
+  `CONFIGS` maps each name to its per-query hit flags — 1 where that
+  configuration found the answer, 0 where it did not.
+
+  `report_naive` is already written. It picks whichever configuration scored
+  best across all twenty queries and reports that score. This is what almost
+  every retrieval writeup does, and it is the reason so many reported
+  improvements do not reproduce.
+
+  Write `report_honest`, which does the same selection **without** scoring on
+  the queries it selected with:
+
+  1. split the queries in half
+  2. pick the best configuration on the first half, score it on the second
+  3. pick the best on the second half, score it on the first
+  4. return the mean of the two held-out scores
+
+  The gap between the two numbers is the *optimism* of the naive procedure.
+  On this data it is twenty points — the naive report says 0.65 and the honest
+  one says 0.45 — and the two folds do not even choose the same configuration,
+  which tells you the selection is mostly reading noise.
+
+  §G of the lesson measures the same effect on the real benchmark: 2.8 points
+  of optimism, and a p-value that moves from 0.0002 to 0.1153.
+
+setup_code: |
+  # Per-query hit flags for four fusion configurations, 20 queries each.
+  CONFIGS = {
+      "a": [1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1],
+      "b": [1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0],
+      "c": [0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0],
+      "d": [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+  }
+  N_QUERIES = 20
+
+  def score(name, indices):
+      """Fraction of the given queries that configuration `name` answered."""
+      flags = CONFIGS[name]
+      return sum(flags[i] for i in indices) / len(indices)
+
+  def best_on(indices):
+      """The configuration scoring highest on the given queries.
+
+      Ties break on the name, so the choice is reproducible rather than
+      dependent on dictionary order.
+      """
+      return min(CONFIGS, key=lambda name: (-score(name, indices), name))
+
+  def report_naive():
+      """Pick the best configuration overall and report its overall score."""
+      everything = list(range(N_QUERIES))
+      return score(best_on(everything), everything)
+
+starter_code: |
+  def report_honest():
+      """Mean held-out score of a configuration chosen without seeing it."""
+      # Bug: selects on the whole set, then scores on half of it. Splitting
+      # the SCORING while selecting on everything is not a held-out estimate --
+      # the choice has already seen every query it is later scored on.
+      everything = list(range(N_QUERIES))
+      pick = best_on(everything)
+      first = list(range(N_QUERIES // 2))
+      second = list(range(N_QUERIES // 2, N_QUERIES))
+      return (score(pick, first) + score(pick, second)) / 2
+
+
+  print("naive report :", round(report_naive(), 3))
+  print("honest report:", round(report_honest(), 3))
+
+tests: |
+  first = list(range(N_QUERIES // 2))
+  second = list(range(N_QUERIES // 2, N_QUERIES))
+
+  naive = report_naive()
+  assert abs(naive - 0.65) < 1e-9, (
+      f"sanity: the naive report should be 0.65, got {naive}"
+  )
+
+  honest = report_honest()
+  assert abs(honest - 0.45) < 1e-9, (
+      f"the honest report came out {honest:.3f}, expected 0.450. Tuning on the "
+      "first half picks 'd', which scores 0.300 on the second; tuning on the "
+      "second half picks 'a', which scores 0.600 on the first. The mean of "
+      "those two held-out scores is 0.450."
+  )
+
+  # The failure the exercise is about.
+  assert honest < naive, (
+      "the honest estimate must be below the naive one — selecting on the "
+      "queries you then report on can only flatter the result"
+  )
+  assert abs((naive - honest) - 0.20) < 1e-9, (
+      f"optimism came out {naive - honest:.3f}, expected 0.200"
+  )
+
+  # The selection itself has to be done per fold, not once.
+  assert best_on(first) != best_on(second), (
+      "sanity: the two halves choose different configurations, which is what "
+      "makes this a demonstration of noise rather than of skill"
+  )
+
+  # A configuration that is genuinely best everywhere must survive the honest
+  # procedure -- otherwise the function is just penalising everything.
+  CONFIGS["always"] = [1] * N_QUERIES
+  try:
+      assert best_on(first) == "always" and best_on(second) == "always", (
+          "a configuration that answers every query should win both folds"
+      )
+      assert abs(report_honest() - 1.0) < 1e-9, (
+          f"with a perfect configuration available the honest report should be "
+          f"1.0, got {report_honest():.3f} — the procedure must reward real "
+          "skill, not merely discount everything"
+      )
+  finally:
+      del CONFIGS["always"]
+
+hints:
+  - "The selection and the scoring must never touch the same queries."
+  - "`best_on(first)` scored with `score(..., second)`, and the other way round."
+  - "Return the mean of the two held-out scores, not of the two tuning scores."
+
+solution: |
+  def report_honest():
+      """Mean held-out score of a configuration chosen without seeing it."""
+      first = list(range(N_QUERIES // 2))
+      second = list(range(N_QUERIES // 2, N_QUERIES))
+      held_out = [
+          score(best_on(first), second),
+          score(best_on(second), first),
+      ]
+      return sum(held_out) / len(held_out)

@@ -1,0 +1,117 @@
+id: ret-l4-rrf
+title: "Weighted RRF, and the off-by-one that hides at the default"
+lesson: modules/03-retrieval/04-hybrid-fusion
+description: |
+  Implement weighted reciprocal rank fusion.
+
+  `LEX` and `DEN` are two retrievers' ranked lists for the same query. Score
+  each document as the sum over the runs it appears in of `w / (k + rank)`,
+  with **rank counted from 1**, and return the documents best first.
+
+  The starter counts ranks from **0**. Run it and compare the two settings it
+  prints:
+
+  - at `k = 60` the bug changes nothing, because adding 1 to a denominator of
+    61 is invisible
+  - at `k = 1` it reorders the results, because the top document's contribution
+    moves from `w/2` to `w/1` — a fifty per cent error on the single largest
+    term in the sum
+
+  This is the shape of bug worth recognising. It is dormant under the library
+  default and wakes up the moment someone tunes `k` downward, so it surfaces
+  as "tuning made things worse" rather than as an error.
+
+  Note also what `k` itself does here. At `k = 60` the fused list starts with
+  `d2` — the only document *both* retrievers returned. At `k = 1` it starts
+  with `d1`, which only the lexical run returned but put first. Large `k`
+  rewards agreement; small `k` rewards confidence.
+
+setup_code: |
+  # Two retrievers' ranked lists for one query. d2 is the only document both
+  # of them returned.
+  LEX = ["d1", "d2", "d3", "d4", "d5"]
+  DEN = ["d6", "d2", "d7", "d8", "d9"]
+
+  def contribution(k, rank, weight):
+      """The score one run at one rank adds, with rank counted from 1."""
+      return weight / (k + rank)
+
+starter_code: |
+  from collections import defaultdict
+
+  def wrrf(runs, weights, k=60, limit=None):
+      """Fuse ranked lists of document ids into one ranking, best first."""
+      scores = defaultdict(float)
+      for run, w in zip(runs, weights):
+          # Bug: enumerate defaults to start=0, so the top document is scored
+          # as w / (k + 0) instead of w / (k + 1).
+          for rank, doc in enumerate(run):
+              scores[doc] += w / (k + rank)
+      ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
+      out = [doc for doc, _ in ranked]
+      return out[:limit] if limit else out
+
+
+  print("k=60, w_lex=0.7 :", wrrf([LEX, DEN], [0.7, 0.3], k=60))
+  print("k=1,  w_lex=0.7 :", wrrf([LEX, DEN], [0.7, 0.3], k=1))
+
+tests: |
+  # k = 1 is where the off-by-one shows.
+  got = wrrf([LEX, DEN], [0.7, 0.3], k=1)
+  assert got == ["d1", "d2", "d3", "d6", "d4", "d5", "d7", "d8", "d9"], (
+      f"at k=1 the fused ranking is {got}, expected "
+      "['d1', 'd2', 'd3', 'd6', 'd4', 'd5', 'd7', 'd8', 'd9']. Ranks are "
+      "counted from 1: the top document contributes w / (k + 1), not w / k."
+  )
+
+  # The same code at the default, where the bug is invisible. This assertion
+  # passes for the starter too — that is the point of including it.
+  assert wrrf([LEX, DEN], [0.7, 0.3], k=60) == \
+      ["d2", "d1", "d3", "d4", "d5", "d6", "d7", "d8", "d9"], (
+      "at k=60 the fused ranking should put d2 first — it is the only document "
+      "both retrievers returned, and a large k rewards agreement"
+  )
+
+  # Weights have to actually weight.
+  assert wrrf([LEX, DEN], [1.0, 0.0], k=1)[:5] == LEX, (
+      "with all the weight on the lexical run, the top of the fused list must "
+      "be the lexical run's own order"
+  )
+  equal = wrrf([LEX, DEN], [0.5, 0.5], k=1)
+  assert equal[0] == "d2", (
+      f"with equal weights at k=1 the fused list starts {equal[:2]}; d2 should "
+      "lead, since it is the only document appearing in both runs and it is "
+      "no longer outweighed by the lexical run's first place"
+  )
+
+  # A document in only one run contributes from that run alone, not a penalty.
+  one = wrrf([["x"], []], [0.5, 0.5], k=1)
+  assert one == ["x"], f"a document in a single run should still rank, got {one}"
+
+  # Deterministic on ties: RRF produces exact ties often, and dictionary order
+  # is not a ranking.
+  tied = wrrf([["b", "a"], ["a", "b"]], [0.5, 0.5], k=1)
+  assert tied == ["a", "b"], (
+      f"a and b have identical fused scores here; ties must break on the id "
+      f"so the ranking is reproducible, got {tied}"
+  )
+
+  assert len(wrrf([LEX, DEN], [0.7, 0.3], k=1, limit=3)) == 3, "limit must truncate"
+
+hints:
+  - "`enumerate` starts at 0 unless you tell it otherwise. What is rank 1?"
+  - "`for rank, doc in enumerate(run, start=1):`"
+  - "Nothing else needs changing — the scoring, sorting and tie-break are already right."
+
+solution: |
+  from collections import defaultdict
+
+  def wrrf(runs, weights, k=60, limit=None):
+      """Fuse ranked lists of document ids into one ranking, best first."""
+      scores = defaultdict(float)
+      for run, w in zip(runs, weights):
+          for rank, doc in enumerate(run, start=1):
+              scores[doc] += w / (k + rank)
+      ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
+      out = [doc for doc, _ in ranked]
+      return out[:limit] if limit else out
