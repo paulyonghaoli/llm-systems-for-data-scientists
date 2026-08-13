@@ -347,12 +347,78 @@
         });
     }
 
+    /* Editor display preferences, shared across every exercise on the site.
+     * The editor's column is otherwise fixed by the page layout, so long
+     * lines scroll out of view with no recourse; these give the reader font
+     * size, line wrapping (default ON, which removes horizontal scrolling
+     * entirely) and a wide mode that breaks the card out of the text column.
+     * One setting, every editor, persisted. */
+    var PREFS_KEY = "editor.prefs";
+    var editorRegistry = [];
+
+    function editorPrefs() {
+      var p = load(PREFS_KEY) || {};
+      return {
+        fontPx: Math.min(24, Math.max(10, p.fontPx || 13)),
+        wrap: p.wrap !== false,          // default: wrap long lines
+        wide: !!p.wide,
+      };
+    }
+
+    function applyPrefsTo(entry, prefs) {
+      entry.wrapEl.style.fontSize = prefs.fontPx + "px";
+      entry.card.classList.toggle("llm-wide", prefs.wide);
+      if (entry.cm) {
+        entry.cm.setOption("lineWrapping", prefs.wrap);
+        entry.cm.refresh();
+      } else {
+        entry.ta.wrap = prefs.wrap ? "soft" : "off";
+      }
+    }
+
+    function updatePrefs(mutate) {
+      var prefs = editorPrefs();
+      mutate(prefs);
+      store(PREFS_KEY, prefs);
+      editorRegistry.forEach(function (entry) {
+        if (document.contains(entry.card)) applyPrefsTo(entry, prefs);
+      });
+    }
+
+    function editorToolbar() {
+      var bar = el("span", "llm-ed-tools");
+      [["A-", "Smaller editor text", function (p) { p.fontPx = Math.max(10, p.fontPx - 1); }],
+       ["A+", "Larger editor text", function (p) { p.fontPx = Math.min(24, p.fontPx + 1); }],
+       ["↩", "Wrap long lines (no horizontal scrolling)", function (p) { p.wrap = !p.wrap; }],
+       ["⇔", "Wide editor (use the full window width)", function (p) { p.wide = !p.wide; }],
+      ].forEach(function (spec) {
+        var b = el("button", "llm-ed-btn", spec[0]);
+        b.type = "button";
+        b.title = spec[1];
+        b.addEventListener("click", function () { updatePrefs(spec[2]); paintToolbars(); });
+        bar.appendChild(b);
+      });
+      return bar;
+    }
+
+    function paintToolbars() {
+      var prefs = editorPrefs();
+      [].slice.call(document.querySelectorAll(".llm-ed-tools")).forEach(function (bar) {
+        var btns = bar.querySelectorAll(".llm-ed-btn");
+        if (btns[2]) btns[2].classList.toggle("is-on", prefs.wrap);
+        if (btns[3]) btns[3].classList.toggle("is-on", prefs.wide);
+      });
+    }
+
     function render(host, exId, spec) {
       var card = el("div", "llm-card");
       var header = el("div", "llm-bank-header");
       header.appendChild(el("span", "llm-ex-title", "🧪 " + spec.title));
+      var right = el("span", "llm-ex-right");
+      right.appendChild(editorToolbar());
       var status = el("span", "llm-status", "not attempted");
-      header.appendChild(status);
+      right.appendChild(status);
+      header.appendChild(right);
       card.appendChild(header);
       if (spec.description) card.appendChild(el("div", "llm-ex-desc", mdLite(spec.description)));
       if ((spec.provided || []).length) card.appendChild(providedPanel(spec.provided));
@@ -369,14 +435,20 @@
       card.appendChild(wrap);
 
       var cm = null;
+      var prefs = editorPrefs();
       if (window.CodeMirror) {
         cm = window.CodeMirror.fromTextArea(ta, {
           mode: "python", lineNumbers: true, indentUnit: 4, viewportMargin: Infinity,
+          lineWrapping: prefs.wrap,
         });
         cm.on("change", persistSoon);
       } else {
         ta.addEventListener("input", persistSoon);
       }
+      var regEntry = { card: card, wrapEl: wrap, cm: cm, ta: ta };
+      editorRegistry.push(regEntry);
+      applyPrefsTo(regEntry, prefs);
+      paintToolbars();
       function getCode() { return cm ? cm.getValue() : ta.value; }
       function setCode(v) { if (cm) cm.setValue(v); else ta.value = v; }
 

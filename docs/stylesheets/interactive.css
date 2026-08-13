@@ -116,12 +116,56 @@ quiz-bank, code-exercise {
   border-radius: 6px;
   overflow: hidden;
   margin: 0.5em 0;
+  font-size: 13px;            /* the A-/A+ controls set this inline */
+  /* Readers can also drag the editor taller from its bottom-right corner. */
+  resize: vertical;
 }
 .llm-editor-wrap .CodeMirror {
-  height: auto;
-  font-size: 0.8rem;
+  height: 100%;
+  min-height: 12em;
+  font-size: inherit;
   line-height: 1.5;
 }
+
+/* ---- editor display controls (font size, wrap, wide) ---- */
+.llm-ex-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.llm-ed-tools { display: inline-flex; gap: 0.25em; }
+.llm-ed-btn {
+  font: inherit;
+  font-size: 0.72em;
+  line-height: 1;
+  padding: 0.3em 0.5em;
+  border: 1px solid var(--md-default-fg-color--lighter, #bbb);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--md-default-fg-color--light, #555);
+  cursor: pointer;
+}
+.llm-ed-btn:hover { border-color: var(--md-primary-fg-color, #5e35b1); color: var(--md-primary-fg-color, #5e35b1); }
+.llm-ed-btn.is-on {
+  background: var(--md-primary-fg-color, #5e35b1);
+  border-color: var(--md-primary-fg-color, #5e35b1);
+  color: #fff;
+}
+
+/* Wide mode: break the exercise card out of the prose column and use the
+ * window. The transform trick centres it on the viewport regardless of the
+ * column's own position; capped so ultra-wide monitors stay readable, and
+ * disabled on screens where the column already fills the window. */
+@media (min-width: 1220px) {
+  .md-typeset .llm-card.llm-wide {
+    position: relative;
+    width: min(92vw, 1500px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+  }
+}
+
 .llm-editor-wrap textarea.llm-plain {
   width: 100%;
   min-height: 12em;
