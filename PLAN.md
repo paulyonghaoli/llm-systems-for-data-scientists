@@ -10,16 +10,17 @@ mini-project each. **Module 3 is under way.** The deepening backlog was cleared 
 the 2,500 floor, mean sentence length 25.7 words, 11.8% short sentences, up
 from 1,574 / 20.3 / 20.5% before the pass.
 
-Seventeen lessons, 36 exercises, 17 question banks (142 questions), 3 autograded
-mini-projects, 16 experiments, 8 generated figures, **28 gates** green and
+Twenty-two lessons, 46 exercises, 22 question banks (192 questions), 3 autograded
+mini-projects, 22 experiments, 8 generated figures, **29 gates** green and
 browser-verified. See §11–15 for the build logs.
 
-**Module 3's corpus, its recorded embeddings, and lessons 3.1–3.2 are done.**
-2,419 documents and 200 queries with all seven planted phenomena verified
-rather than asserted (gate 25), that verification adversarially tested (gate
-26), and real pinned embeddings checked offline (gate 27). See §15,
+**Module 3 is at 3.7 of 8.** Its corpus (2,419 documents, 200 queries, all
+seven planted phenomena verified rather than asserted by gate 25, that
+verification adversarially tested by gate 26), a pinned embedding fixture
+checked offline by gate 27, a pinned cross-encoder reranker fixture, and an
+authored cited-answer set for groundedness checking. See §15,
 `data/corpus/README.md`, and §10a amendment 2 for the claim this work
-withdrew. Next: lessons 3.3–3.8.
+withdrew. Next: lesson 3.8, then Module 4 and Capstone I.
 
 **Audience.** Data scientists who are fluent in Python, pandas, NumPy, sklearn,
 statistics, experiment design and offline evaluation — and who have never
@@ -361,7 +362,7 @@ CI was red. `tools/check_one.py <exercise-id>` is the way to iterate on one item
 | 25 | **Corpus phenomena are measured** — each of the seven planted phenomena is checked by a property it implies, using an untuned BM25 | a corpus that is *labelled* with a phenomenon it does not contain, which would make every retrieval result in Modules 3–4 a measurement of nothing |
 | 26 | **Gate 25 can fail** — nine mutations each destroy one phenomenon, and gate 25 must catch every one | a check that has only ever passed, which is indistinguishable from a check that cannot fail |
 | 27 | **Embedding fixture** — shapes, row order and int8 fidelity hold, and dense retrieval beats BM25 on the vocabulary-mismatch slice | a fixture whose rows have drifted out of line with the corpus, and wrong pooling — which still produces unit-norm vectors that merely retrieve worse |
-| 28 | **No stray control characters in prose** — a tab, formfeed or bell in a lesson is an un-escaped LaTeX backslash a Python string literal ate | maths that renders as garbage while word count, sections, components and every other gate stay green |
+| 28 | **No stray control characters in prose or source** — a tab, formfeed, bell or backspace in a lesson, or in any file under `tools/` or `experiments/`, is an escape that a non-raw string literal ate | maths that renders as garbage, or a regex holding literal BACKSPACE characters that compiles, runs and silently matches nothing — while word count, sections, components and every other gate stay green |
 | 29 | **The widget's markdown renderer protects code spans** — `mdLite` is exercised under node against the cases that broke it | an exponent inside backticks pairing its `**` with a real bold marker later in the text, bolding across the `<code>` boundary; the source YAML is valid markdown and no other gate can see it |
 
 Gates 12–18 are specific to this subject; 1–11, 19–20 and 22 are inherited; 21 and 23 are ours from the sibling robotics curriculum.

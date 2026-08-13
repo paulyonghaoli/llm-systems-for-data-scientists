@@ -1,0 +1,264 @@
+id: ret-l7
+lesson: modules/03-retrieval/07-groundedness
+title: "3.7 - Groundedness and citation"
+questions:
+  - id: q1
+    type: single
+    difficulty: hard
+    prompt: >-
+      An answer cites a document that exists, was in the retrieved context, and
+      contains the exact figure the answer states. Every content check passes.
+      What could still be wrong?
+    options:
+      - text: "The cited document may have been superseded — it says what the answer claims, and it is no longer the governing version."
+        correct: true
+        explanation: >-
+          Nothing in the text distinguishes this from a correct answer: there
+          is no contradiction to find and no missing figure. Only a provenance
+          field does. Measured here, a system without it misses five such
+          answers while reporting itself 88.6% effective.
+      - text: "Nothing — that is the definition of a grounded answer."
+        explanation: >-
+          It is the definition of a *consistent* answer. Grounded additionally
+          requires the source to be the right one, which is a question about
+          the document rather than about its text.
+      - text: "The citation may point to the wrong sentence within the document."
+        explanation: >-
+          A real limitation of document-level citation and not the one being
+          asked about, since the figure genuinely is the document's.
+      - text: "The model may not have read the document even though it was in context."
+        explanation: >-
+          Unknowable and largely irrelevant: if the cited document was
+          retrieved and supports the claim, the attribution holds regardless of
+          the model's internal route to it.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      A groundedness checker reports "94% of answers are grounded". What is
+      missing?
+    options:
+      - text: "The rate at which it rejects answers that are actually fine."
+        correct: true
+        explanation: >-
+          A checker that flags everything detects everything. Detection and
+          false-positive rates are only interpretable together, exactly as a
+          classifier's accuracy is uninterpretable without its base rate.
+      - text: "The name of the model that generated the answers."
+        explanation: >-
+          Useful context and not what makes the number uninterpretable.
+      - text: "Whether the answers were also correct."
+        explanation: >-
+          A real and separate distinction — an answer can be true and
+          ungrounded — but the missing quantity here is the error rate in the
+          other direction.
+      - text: "The number of answers evaluated."
+        explanation: >-
+          Worth reporting, and a checker with an unknown false-positive rate is
+          uninterpretable at any sample size.
+
+  - id: q3
+    type: multi
+    difficulty: medium
+    prompt: >-
+      Which of these checks need no document text at all?
+    options:
+      - text: "Every cited id exists in the corpus."
+        correct: true
+        explanation: >-
+          A set membership test against the index. It catches the fabricated
+          reference, which is a model producing the shape of a citation rather
+          than a real one.
+      - text: "Every cited id was in the retrieved context."
+        correct: true
+        explanation: >-
+          Needs the request log rather than the corpus, and it is the strictest
+          cheap check available: a document the model was never shown cannot be
+          the source of anything it wrote.
+      - text: "No cited document is superseded."
+        correct: true
+        explanation: >-
+          Pure provenance, and the only check that catches a stale citation.
+      - text: "Every figure the answer states appears in a cited document."
+        explanation: >-
+          This is the one content check, and the only one that catches an
+          answer whose citation is real and whose number is not.
+      - text: "Every sentence making a factual claim carries a citation."
+        explanation: >-
+          Needs no *document* text, but it does need to decide what a claim is.
+          The lesson uses numeric sentences as a proxy precisely because the
+          general case needs a model.
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      Why check whether a citation was in the retrieved context, rather than
+      only whether the document supports the claim?
+    options:
+      - text: "A model citing a document it was never shown did not read it, so any apparent support is coincidence."
+        correct: true
+        explanation: >-
+          The claim matches text the model reproduced from training rather than
+          from your corpus. Content checking would pass that answer and the
+          system would be attributing to a source it never consulted. It is
+          also cheaper than any content comparison.
+      - text: "Because documents outside the context are usually irrelevant."
+        explanation: >-
+          They are often highly relevant — that is what makes the failure
+          plausible. The problem is provenance, not relevance.
+      - text: "To keep the citation list short enough to display."
+        explanation: >-
+          A presentation concern unrelated to whether an attribution is valid.
+      - text: "Because context documents are the only ones with provenance metadata."
+        explanation: >-
+          Provenance is a property of the document in the corpus, available
+          regardless of whether it was retrieved.
+
+  - id: q5
+    type: single
+    difficulty: hard
+    prompt: >-
+      A number check tests whether the figure appears in the cited document
+      using `str(n) in document_text`. What goes wrong?
+    options:
+      - text: "It matches inside larger numbers — a claim of 24 hours is 'supported' by a document dated 2024."
+        correct: true
+        explanation: >-
+          It reports success it has not earned, which is worse than a check
+          that fails: a system built on it reports high groundedness precisely
+          because it cannot fail. Compare numbers as tokens.
+      - text: "It is too slow on long documents."
+        explanation: >-
+          Substring search is fast. Being wrong is the problem.
+      - text: "It cannot handle documents with no numbers."
+        explanation: >-
+          It handles them correctly, returning no match.
+      - text: "It fails when a document states the figure in words rather than digits."
+        explanation: >-
+          A genuine limitation of the whole approach and unrelated to the
+          substring bug, since token comparison has the same blind spot.
+
+  - id: q6
+    type: single
+    difficulty: medium
+    prompt: >-
+      "Every figure in the sentence appears in a cited document" — what does
+      this establish, and what does it not?
+    options:
+      - text: "That the number is present in the document, not that the document asserts it of the thing the query asked about."
+        correct: true
+        explanation: >-
+          A policy stating both 24 and 48 hours supports either claim under
+          this check. Closing that gap needs a claim-level judge, which has an
+          error rate of its own and is what Course IV spends a module on.
+      - text: "That the answer is correct."
+        explanation: >-
+          Correctness and groundedness are distinct: an answer can be true and
+          unsupported, or supported and out of date.
+      - text: "That the model read the cited document."
+        explanation: >-
+          The in-context check comes closer to that, and no check establishes
+          it directly.
+      - text: "Nothing useful, since it is only string matching."
+        explanation: >-
+          It is the only check here that catches the wrong-number failure, which
+          is precisely the one a reader cannot see.
+
+  - id: q7
+    type: numeric
+    difficulty: medium
+    prompt: >-
+      44 defective answers. Metadata-only checks catch all but the 6 whose
+      citation is real and whose figure is wrong. What is the detection rate,
+      as a percentage to one decimal place?
+    answer: 86.4
+    tolerance: 0.3
+    explanation: >-
+      38/44 = 86.4%. The remaining six need the one content check. Worth
+      knowing before deciding whether to fetch document text at verification
+      time: most of the value here is available from metadata alone.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      Which single change most improves a RAG system that currently logs only
+      the question and the answer?
+    options:
+      - text: "Log the retrieved context with every generation."
+        correct: true
+        explanation: >-
+          Without it the in-context check is impossible and the content check is
+          guesswork, and there is no way to reconstruct it afterwards. It is the
+          highest-value addition to a system that lacks it.
+      - text: "Add a second generator and compare the answers."
+        explanation: >-
+          Expensive, and agreement between two models is not evidence of
+          grounding — they can agree on something neither source supports.
+      - text: "Ask the model to rate its own confidence."
+        explanation: >-
+          Self-reported confidence is not calibrated and is not checkable
+          against anything.
+      - text: "Store embeddings of the answers for later analysis."
+        explanation: >-
+          Useful for clustering complaints and it answers no question about
+          attribution.
+
+  - id: q9
+    type: single
+    difficulty: hard
+    prompt: >-
+      The first run of this lesson's experiment reported a false-positive rate
+      of 0.083 — one "grounded" answer failing the number check. What was the
+      right response?
+    options:
+      - text: "Investigate, and fix the answer builder, which had stated a figure recorded in the document's metadata but never written in its text."
+        correct: true
+        explanation: >-
+          The checker was correct and the label was wrong. A fact recorded
+          *about* a document is not a fact stated *in* it — the same confusion
+          the lesson exists to catch, one level up. The builder now verifies
+          that everything it labels grounded passes every check.
+      - text: "Accept it as the checker's inherent error rate and report it."
+        explanation: >-
+          Reporting an unexamined 8% error rate would have hidden a defect in
+          the data, and the number would have been wrong.
+      - text: "Relax the number check until the grounded answers pass."
+        explanation: >-
+          Tuning a check until it stops disagreeing with a label is how a check
+          stops measuring anything.
+      - text: "Remove that answer from the set."
+        explanation: >-
+          It would have concealed a systematic bug affecting every topic whose
+          rules are written in days rather than hours.
+
+  - id: q10
+    type: single
+    difficulty: hard
+    prompt: >-
+      Your retrieval layer returns document text and nothing else. Which class
+      of ungrounded answer becomes undetectable, and how would you know?
+    options:
+      - text: "Stale citations — and you would not know, because the system reports higher groundedness for lacking the field that would lower it."
+        correct: true
+        explanation: >-
+          This is the quiet version of the false-positive problem. The absence
+          of provenance does not produce an error or a gap in a report; it
+          removes a question, and every answer that would have failed it now
+          passes. Store version and supersession at ingestion, because
+          reconstructing them later is usually impossible.
+      - text: "Fabricated citations, since you cannot check ids without metadata."
+        explanation: >-
+          Checking that an id exists needs only the corpus index, which any
+          retrieval layer has.
+      - text: "Wrong numbers, since you need the document's facts rather than its text."
+        explanation: >-
+          The number check reads text, which is exactly what this layer does
+          return.
+      - text: "None — provenance is a nice-to-have for auditing."
+        explanation: >-
+          Measured here it is the difference between catching five stale
+          citations and catching none of them, in a system that would report
+          88.6% effectiveness either way.

@@ -1,0 +1,115 @@
+id: ret-l7-numbers
+title: "Number support, and the substring that fakes it"
+lesson: modules/03-retrieval/07-groundedness
+description: |
+  Check that every figure an answer states appears in a document that sentence
+  cites.
+
+  The starter asks whether the number is *in* the document text, using a
+  substring test. Run it and read the third and fourth cases.
+
+  `policy-a` begins "Effective 2024-02-01", so the substring `24` occurs in it
+  — inside the year. A claim of "24 hours" is therefore reported as supported
+  by a document that says 48. `policy-b` is dated 2019 and likewise "supports"
+  a claim of 19 times. The check passes everything, which is the failure mode
+  that matters: it reports success it has not earned, and a system built on it
+  reports high groundedness precisely because it cannot fail.
+
+  Compare numbers as *tokens*, not as substrings.
+
+  Two cases must keep passing, for reasons worth being deliberate about. A
+  sentence with no numbers makes no checkable numeric claim. A sentence with no
+  citation is a different defect — `every_claim_cited` owns it — and reporting
+  one failure for two distinct problems is what makes a checker's output
+  useless for locating a weakness.
+
+setup_code: |
+  import re
+
+  DOCS = {
+      "policy-a": ("Effective 2024-02-01. A hold lasts up to 48 hours and "
+                   "claims close after 21 days."),
+      "policy-b": "Effective 2019-06-01. Redelivery is attempted three times.",
+  }
+
+  # (sentence, citations) pairs from an answer under review.
+  CLAIMS = [
+      ("A hold lasts up to 48 hours.", ["policy-a"]),
+      ("Claims close after 21 days.", ["policy-a"]),
+      ("A hold lasts up to 24 hours.", ["policy-a"]),
+      ("Redelivery is attempted 19 times.", ["policy-b"]),
+      ("Exceptions are granted in writing.", ["policy-a"]),
+      ("A hold lasts up to 48 hours.", []),
+  ]
+
+  def numbers_in(text):
+      """Every whole number in a string, as tokens."""
+      return set(re.findall(r"\b\d+\b", text))
+
+starter_code: |
+  def supported(sentence, cites, docs):
+      """True if every figure in the sentence appears in a cited document."""
+      nums = re.findall(r"\d+", sentence)
+      if not nums or not cites:
+          return True
+      # Bug: a substring test. "24" occurs inside "2024", so a claim of 24
+      # hours is "supported" by a document dated 2024 that says 48.
+      return all(any(n in docs.get(c, "") for c in cites) for n in nums)
+
+
+  for text, cites in CLAIMS:
+      print(f"{supported(text, cites, DOCS)!s:<6} {text!r} cites {cites}")
+
+tests: |
+  def check(i):
+      text, cites = CLAIMS[i]
+      return supported(text, cites, DOCS)
+
+  # Genuinely supported claims must still pass.
+  assert check(0), "'48 hours' is stated in policy-a and must be supported"
+  assert check(1), "'21 days' is stated in policy-a and must be supported"
+
+  # The two the substring test gets wrong.
+  assert not check(2), (
+      "'A hold lasts up to 24 hours.' cites policy-a, which says 48 hours and "
+      "is dated 2024-02-01. The digits 24 appear inside the year, so a "
+      "substring test reports support that does not exist."
+  )
+  assert not check(3), (
+      "'Redelivery is attempted 19 times.' cites policy-b, which is dated "
+      "2019-06-01 and states no such figure"
+  )
+
+  # Neither of these is this check's business.
+  assert check(4), "a sentence with no numbers makes no checkable numeric claim"
+  assert check(5), (
+      "a sentence with no citation is the every_claim_cited check's problem; "
+      "reporting it here too would attribute one defect to two checks"
+  )
+
+  # Multi-citation: support may come from any cited document.
+  assert supported("48 hours and three times.", ["policy-a", "policy-b"], DOCS)
+  assert not supported("48 hours and 99 times.", ["policy-a", "policy-b"], DOCS)
+
+  # An unresolvable citation contributes no support rather than raising.
+  assert not supported("A hold lasts 48 hours.", ["policy-zz"], DOCS), (
+      "a citation naming a document that does not exist supports nothing; it "
+      "must not raise either, since check 1 is what reports that defect"
+  )
+
+hints:
+  - "`numbers_in` is provided and does the right thing. Compare it with what the starter does."
+  - "Collect the numbers available from the cited documents, then check for any the sentence states that they lack."
+  - "`nums - available` is empty exactly when every stated figure is present."
+
+solution: |
+  def supported(sentence, cites, docs):
+      """True if every figure in the sentence appears in a cited document."""
+      nums = numbers_in(sentence)
+      if not nums or not cites:
+          return True
+      available = set()
+      for c in cites:
+          if c in docs:
+              available |= numbers_in(docs[c])
+      return not (nums - available)

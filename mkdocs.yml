@@ -101,3 +101,4 @@ nav:
       - "3.4 Hybrid retrieval and RRF": modules/03-retrieval/04-hybrid-fusion.md
       - "3.5 Chunking": modules/03-retrieval/05-chunking.md
       - "3.6 Reranking": modules/03-retrieval/06-reranking.md
+      - "3.7 Groundedness and citation": modules/03-retrieval/07-groundedness.md

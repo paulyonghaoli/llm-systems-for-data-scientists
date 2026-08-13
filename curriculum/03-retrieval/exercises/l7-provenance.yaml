@@ -1,0 +1,156 @@
+id: ret-l7-provenance
+title: "The citation that content checking cannot fault"
+lesson: modules/03-retrieval/07-groundedness
+description: |
+  Three answers, each citing a document that exists, was retrieved, and
+  contains the figure the answer states. Every content check passes all three.
+
+  One of them is wrong. `ANSWERS[2]` cites `policy-hold-v1`, which really does
+  say 72 hours — and which was replaced last year by `policy-hold-v2`, saying
+  24. The answer quotes a real document accurately and gives the reader a
+  number that stopped being true.
+
+  Nothing in the text distinguishes it. There is no phrasing to detect, no
+  contradiction to find, no missing figure. The only thing that separates it
+  from a correct answer is the `superseded` field stored beside the document.
+
+  Write `audit`, returning the sorted list of check names that failed. The
+  starter runs the two content checks and stops, so it clears all three
+  answers. Add the provenance check.
+
+  This is why §F says to store version and supersession at ingestion. A system
+  that keeps only text cannot ask this question, and will report high
+  groundedness *because* it cannot ask it.
+
+setup_code: |
+  import re
+
+  DOCS = {
+      "policy-hold-v1": {
+          "text": "A hold lasts up to 72 hours. Effective 2024-02-01.",
+          "superseded": True,
+      },
+      "policy-hold-v2": {
+          "text": "A hold lasts up to 24 hours. Effective 2025-01-01.",
+          "superseded": False,
+      },
+      "policy-claims-v1": {
+          "text": "Claims must be submitted within 28 days.",
+          "superseded": False,
+      },
+  }
+
+  ANSWERS = [
+      {"text": "A hold lasts up to 24 hours.", "cites": ["policy-hold-v2"]},
+      {"text": "Claims must be submitted within 28 days.", "cites": ["policy-claims-v1"]},
+      {"text": "A hold lasts up to 72 hours.", "cites": ["policy-hold-v1"]},
+  ]
+
+  CONTEXT = ["policy-hold-v1", "policy-hold-v2", "policy-claims-v1"]
+
+  def numbers_in(text):
+      """Every whole number in a string, as tokens."""
+      return set(re.findall(r"\b\d+\b", text))
+
+starter_code: |
+  def audit(answer, docs, context):
+      """Names of the checks this answer fails, sorted."""
+      failed = []
+
+      if any(c not in docs for c in answer["cites"]):
+          failed.append("citation_resolves")
+
+      if any(c not in context for c in answer["cites"]):
+          failed.append("citation_in_context")
+
+      nums = numbers_in(answer["text"])
+      available = set()
+      for c in answer["cites"]:
+          if c in docs:
+              available |= numbers_in(docs[c]["text"])
+      if nums and answer["cites"] and (nums - available):
+          failed.append("numbers_supported")
+
+      # Missing: nothing here looks at whether the cited document is still the
+      # governing one. All three answers therefore pass, including the one
+      # quoting a policy that was replaced.
+      return sorted(failed)
+
+
+  for i, a in enumerate(ANSWERS):
+      print(f"ANSWERS[{i}] -> {audit(a, DOCS, CONTEXT) or 'clean'}")
+
+tests: |
+  clean = audit(ANSWERS[0], DOCS, CONTEXT)
+  assert clean == [], f"the first answer is correct in every respect, got {clean}"
+  assert audit(ANSWERS[1], DOCS, CONTEXT) == [], "the second answer is also correct"
+
+  stale = audit(ANSWERS[2], DOCS, CONTEXT)
+  assert stale == ["no_superseded_source"], (
+      f"the third answer should fail exactly ['no_superseded_source'], got "
+      f"{stale}. It cites a document that exists, was retrieved, and does say "
+      "72 hours — so every content check passes. Only the superseded flag "
+      "distinguishes it from a correct answer."
+  )
+
+  # The content checks must still work, or the provenance check is masking them.
+  fabricated = audit({"text": "A hold lasts 24 hours.", "cites": ["policy-hold-v9"]},
+                     DOCS, CONTEXT)
+  assert "citation_resolves" in fabricated, f"expected a resolution failure, got {fabricated}"
+
+  wrong = audit({"text": "A hold lasts up to 99 hours.", "cites": ["policy-hold-v2"]},
+                DOCS, CONTEXT)
+  assert wrong == ["numbers_supported"], (
+      f"a figure absent from the cited document should fail only the number "
+      f"check, got {wrong}"
+  )
+
+  outside = audit({"text": "A hold lasts up to 24 hours.", "cites": ["policy-hold-v2"]},
+                  DOCS, ["policy-claims-v1"])
+  assert outside == ["citation_in_context"], (
+      f"a citation outside the retrieved context should fail only that check, "
+      f"got {outside}"
+  )
+
+  # An answer can fail more than one check, and the report must say so.
+  both = audit({"text": "A hold lasts up to 99 hours.", "cites": ["policy-hold-v1"]},
+               DOCS, CONTEXT)
+  assert both == ["no_superseded_source", "numbers_supported"], (
+      f"expected both failures, sorted, got {both}"
+  )
+
+  # An unresolvable id must not raise in the provenance check either.
+  assert "no_superseded_source" not in audit(
+      {"text": "A hold lasts 24 hours.", "cites": ["policy-hold-v9"]}, DOCS, CONTEXT), (
+      "a document that does not exist cannot be reported as superseded; that "
+      "is check 1's finding, not this one's"
+  )
+
+hints:
+  - "One more block, in the same shape as the others."
+  - "`if any(docs[c]['superseded'] for c in answer['cites'] if c in docs):`"
+  - "Guard on `c in docs`, or an unresolvable citation raises KeyError instead of being reported by check 1."
+
+solution: |
+  def audit(answer, docs, context):
+      """Names of the checks this answer fails, sorted."""
+      failed = []
+
+      if any(c not in docs for c in answer["cites"]):
+          failed.append("citation_resolves")
+
+      if any(c not in context for c in answer["cites"]):
+          failed.append("citation_in_context")
+
+      nums = numbers_in(answer["text"])
+      available = set()
+      for c in answer["cites"]:
+          if c in docs:
+              available |= numbers_in(docs[c]["text"])
+      if nums and answer["cites"] and (nums - available):
+          failed.append("numbers_supported")
+
+      if any(docs[c]["superseded"] for c in answer["cites"] if c in docs):
+          failed.append("no_superseded_source")
+
+      return sorted(failed)

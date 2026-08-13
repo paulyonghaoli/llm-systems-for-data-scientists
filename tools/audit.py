@@ -268,6 +268,27 @@ def main() -> int:
             if not target.exists():
                 problems.append(f"docs/curriculum.md: links to missing {m.group(1)}")
 
+    # Gate 28, extended to source. The same escape mangling that corrupts a
+    # maths block corrupts a regex: an `r"\b\d+\b"` written through a
+    # non-raw string literal becomes a pattern containing two literal
+    # BACKSPACE characters, which compiles, runs, and silently matches
+    # nothing. That happened twice while building Module 3, so the check now
+    # covers the code as well as the prose.
+    #
+    # Python source in this repository never contains a literal tab — ruff
+    # enforces spaces — so any control character here is corruption.
+    for src in sorted(list((ROOT / "tools").glob("*.py"))
+                      + list((ROOT / "experiments").glob("*.py"))):
+        body = src.read_text(encoding="utf-8")
+        m = re.search(r"[\x00-\x09\x0b-\x1f]", body)
+        if m:
+            line = body.count("\n", 0, m.start()) + 1
+            problems.append(
+                f"{src.relative_to(ROOT).as_posix()}:{line}: control character "
+                f"{m.group().encode().hex()} in source — almost certainly an escape "
+                f"(\\b, \\t, \\f) that a non-raw string literal ate"
+            )
+
     lessons = [p for p in docs if is_lesson(p)]
     print(f"pages {len(docs)}  lessons {len(lessons)}  "
           f"exercises {len(cs.exercises)}  banks {len(cs.quizzes)}")

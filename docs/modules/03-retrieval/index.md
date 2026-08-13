@@ -47,5 +47,6 @@ system, they are what closes a gap this large.
 4. [3.4 Hybrid retrieval, and what fusion really recovers](04-hybrid-fusion.md) — **available**
 5. [3.5 Chunking, and the benefit this corpus cannot show](05-chunking.md) — **available**
 6. [3.6 Reranking, and the metric that hides it](06-reranking.md) — **available**
+7. [3.7 Groundedness and citation](07-groundedness.md) — **available**
 
-Lessons 3.7–3.8 (groundedness and citation, retrieval metrics) are in progress.
+Lesson 3.8 (retrieval metrics) is in progress.
