@@ -43,6 +43,7 @@ system, they are what closes a gap this large.
 
 1. [3.1 Embedding geometry: the space is not shaped how you think](01-embedding-geometry.md) — **available**
 2. [3.2 Exact and approximate search](02-exact-and-approximate.md) — **available**
+3. [3.3 BM25, and why the old baseline still wins](03-bm25.md) — **available**
 
-Lessons 3.3–3.8 (BM25, hybrid fusion and RRF, chunking, reranking,
-groundedness and citation, retrieval metrics) are in progress.
+Lessons 3.4–3.8 (hybrid fusion and RRF, chunking, reranking, groundedness and
+citation, retrieval metrics) are in progress.

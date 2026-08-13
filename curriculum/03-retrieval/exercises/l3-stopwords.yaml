@@ -1,0 +1,132 @@
+id: ret-l3-stopwords
+title: "Stopwords your corpus decides, not a word list"
+lesson: modules/03-retrieval/03-bm25
+description: |
+  Derive a stopword list from document frequency instead of importing one.
+
+  `DOCS` is a six-document corpus of logistics text. Every document contains
+  "the" and "consignment"; five contain "depot". An imported English stopword
+  list removes the first and keeps the other two, even though in *this*
+  collection they carry exactly as little information — a term in every
+  document cannot distinguish between documents, whatever language it belongs
+  to.
+
+  The starter uses `ENGLISH_STOPWORDS`. Replace it with a rule: any term
+  appearing in more than `threshold` of the documents is a stopword here.
+
+  The last assertion is the one worth reading. Document 0 says "consignment"
+  three times. With the imported list, a query for
+  `["consignment", "lithium"]` therefore ranks document 0 above the one
+  document actually about lithium batteries — the noise term outvotes the
+  signal term. The derived list deletes "consignment" and the ranking
+  corrects itself.
+
+setup_code: |
+  DOCS = [
+      "the consignment was held at the depot pending a consignment review "
+      "because the consignment failed".split(),
+      "the consignment is held at the depot for verification".split(),
+      "the consignment was released from the depot yesterday".split(),
+      "the consignment remains at the depot awaiting collection".split(),
+      "the consignment was held at the depot for inspection".split(),
+      "lithium batteries must be declared before the consignment is collected".split(),
+  ]
+
+  # A short general-purpose list, of the kind a library ships.
+  ENGLISH_STOPWORDS = {
+      "the", "a", "an", "at", "for", "from", "is", "was", "be", "must",
+      "before", "and", "or", "of", "to", "in", "on",
+  }
+
+  def document_frequency(docs):
+      """How many documents contain each term at least once."""
+      df = {}
+      for d in docs:
+          for w in set(d):
+              df[w] = df.get(w, 0) + 1
+      return df
+
+  def rank(docs, query, stop):
+      """Rank documents by how many non-stopword query terms they contain.
+
+      A deliberately crude scorer: the point of this exercise is which terms
+      survive filtering, not how they are weighted once they do.
+      """
+      terms = [w for w in query if w not in stop]
+      scored = []
+      for i, d in enumerate(docs):
+          scored.append((sum(d.count(w) for w in terms), -i))
+      return [(-j) for _, j in sorted(scored, reverse=True)]
+
+starter_code: |
+  def derive_stopwords(docs, threshold=0.5):
+      """Terms appearing in more than `threshold` of the documents."""
+      # Bug: ignores the corpus entirely and returns an imported word list.
+      # It cannot know that "consignment" is in every document here, and it
+      # removes words that might have discriminated.
+      return set(ENGLISH_STOPWORDS)
+
+
+  df = document_frequency(DOCS)
+  print("document frequency:", dict(sorted(df.items(), key=lambda kv: -kv[1])[:6]))
+  print("derived stopwords :", sorted(derive_stopwords(DOCS)))
+  print("ranking, imported :", rank(DOCS, ["consignment", "lithium"], ENGLISH_STOPWORDS))
+  print("ranking, derived  :", rank(DOCS, ["consignment", "lithium"], derive_stopwords(DOCS)))
+
+tests: |
+  stop = derive_stopwords(DOCS, threshold=0.5)
+
+  assert stop == {"the", "consignment", "depot", "at"}, (
+      f"derived {sorted(stop)}, expected ['at', 'consignment', 'depot', 'the'] "
+      "— the four terms in more than half of these six documents"
+  )
+
+  # The point of deriving rather than importing.
+  assert "consignment" in stop, (
+      "'consignment' appears in all six documents, so it distinguishes nothing "
+      "here and must be filtered. No English stopword list contains it, which "
+      "is why the list has to come from the corpus."
+  )
+  assert "lithium" not in stop, (
+      "'lithium' appears in one document of six — it is the most "
+      "discriminating term present and must survive"
+  )
+  assert "held" not in stop, (
+      "'held' is in three of six, which is not more than half"
+  )
+
+  # The threshold has to be a threshold.
+  loose = derive_stopwords(DOCS, threshold=0.9)
+  assert loose == {"the", "consignment"}, (
+      f"at threshold 0.9 only terms in more than 5.4 documents qualify, so "
+      f"expected ['consignment', 'the'], got {sorted(loose)}"
+  )
+  assert len(derive_stopwords(DOCS, threshold=1.0)) == 0, (
+      "at threshold 1.0 the cutoff is 6 documents and the test is strictly "
+      "greater than, so nothing qualifies — 'the' is in 6, which is not more "
+      "than 6"
+  )
+
+  # And the consequence for retrieval.
+  imported = rank(DOCS, ["consignment", "lithium"], ENGLISH_STOPWORDS)
+  derived = rank(DOCS, ["consignment", "lithium"], stop)
+  assert derived[0] == 5, (
+      f"with derived stopwords the lithium document (index 5) should rank "
+      f"first, got {derived}"
+  )
+  assert imported[0] != 5, (
+      "sanity: with the imported list, 'consignment' still scores and the "
+      "lithium document does not come first"
+  )
+
+hints:
+  - "You are given `document_frequency`. Use it, and compare each count against threshold * len(docs)."
+  - "`{w for w, c in document_frequency(docs).items() if c > threshold * len(docs)}`"
+  - "Strictly greater than, not greater-or-equal — at threshold 0.5, three of six is not enough."
+
+solution: |
+  def derive_stopwords(docs, threshold=0.5):
+      """Terms appearing in more than `threshold` of the documents."""
+      df = document_frequency(docs)
+      cutoff = threshold * len(docs)
+      return {w for w, c in df.items() if c > cutoff}

@@ -1,0 +1,131 @@
+id: ret-l3-bm25
+title: "Saturation and length, the two things BM25 adds"
+lesson: modules/03-retrieval/03-bm25
+description: |
+  Implement the BM25 scoring sum from §C.
+
+  `TF` holds each document's term counts, `IDF` the precomputed inverse
+  document frequencies, `LENS` the document lengths and `AVGDL` the collection
+  average. Score the query by summing over its terms.
+
+  The starter computes `idf * tf` — plain TF-IDF, which is BM25 with both of
+  its ideas removed. Run it and compare the two rankings. Document 1 mentions
+  "hold" eight times in three hundred tokens; document 2 mentions it once in
+  twenty. The starter ranks document 1 first because eight is more than one.
+  BM25 ranks document 2 first, because a single mention in a short document is
+  stronger evidence than eight mentions in a long one.
+
+  Both corrections come from one formula:
+
+  ```
+  idf(t) * f * (k1 + 1) / (f + k1 * (1 - b + b * len / avgdl))
+  ```
+
+  The numerator saturates as `f` grows, and the `b` term in the denominator
+  penalises length.
+
+setup_code: |
+  # Term counts per document.
+  TF = {
+      0: {"hold": 1, "verification": 1, "depot": 2},
+      1: {"hold": 8, "verification": 1, "depot": 1},
+      2: {"hold": 1, "verification": 1, "depot": 1},
+      3: {"hold": 2, "verification": 2, "depot": 1},
+      4: {"depot": 3},
+      5: {"hold": 1},
+  }
+  LENS = [60, 300, 20, 90, 150, 45]
+  AVGDL = 110.83333333333333
+
+  # Robertson idf over a 2,419-document collection: "hold" in 300 documents,
+  # "verification" in 90, "depot" in 1,200.
+  IDF = {"hold": 2.0861, "verification": 3.2862, "depot": 0.7010}
+
+  QUERY = ["hold", "verification"]
+
+  def linear_tfidf(doc, terms):
+      """Plain idf-weighted term frequency, for comparison.
+
+      No saturation and no length normalisation -- the thing BM25 improves on.
+      """
+      return sum(IDF[t] * TF[doc].get(t, 0) for t in terms)
+
+  def ranking(scorer, terms):
+      """Document indices ordered best first under a scoring function."""
+      return sorted(range(len(LENS)), key=lambda i: (-scorer(i, terms), i))
+
+starter_code: |
+  def bm25_score(doc, terms, k1=1.5, b=0.75):
+      """BM25 score of a document for a list of query terms."""
+      total = 0.0
+      for t in terms:
+          f = TF[doc].get(t, 0)
+          if not f:
+              continue
+          # Bug: linear in term frequency and blind to document length.
+          # This is TF-IDF; the whole of BM25 is the two corrections missing here.
+          total += IDF[t] * f
+      return total
+
+
+  print("bm25 scores  ", [round(bm25_score(i, QUERY), 4) for i in range(len(LENS))])
+  print("bm25 ranking ", ranking(bm25_score, QUERY))
+  print("tfidf ranking", ranking(linear_tfidf, QUERY))
+
+tests: |
+  scores = [round(bm25_score(i, QUERY), 4) for i in range(len(LENS))]
+  expected = [6.7695, 5.5120, 8.5112, 8.1682, 0.0, 2.8471]
+  assert scores == expected, (
+      f"scores came out {scores}, expected {expected}. Check the formula: "
+      "idf * f * (k1 + 1) / (f + k1 * (1 - b + b * len / avgdl))"
+  )
+
+  # Length normalisation: fewer mentions in a shorter document must win.
+  assert bm25_score(2, QUERY) > bm25_score(1, QUERY), (
+      f"document 2 (one 'hold' in 20 tokens) scored {bm25_score(2, QUERY):.3f} "
+      f"and document 1 (eight in 300) scored {bm25_score(1, QUERY):.3f}. A long "
+      "document has more room to contain your terms by chance, so the same "
+      "match counts for less — that is what the b term does."
+  )
+
+  # Saturation: eight times the term frequency is not eight times the score.
+  one = bm25_score(5, ["hold"])          # tf=1, len=45
+  many = IDF["hold"] * 8 * 2.5 / (8 + 1.5 * (1 - 0.75 + 0.75 * 45 / AVGDL))
+  assert many / one < 2.5, (
+      f"eight occurrences scored {many / one:.2f} times one occurrence. BM25 "
+      "bounds a single term's contribution at k1 + 1, so the ratio cannot "
+      "approach 8 — if it does, the term frequency is being used linearly."
+  )
+
+  # And the two methods must actually disagree, or nothing was demonstrated.
+  assert ranking(bm25_score, QUERY) == [2, 3, 0, 1, 5, 4], (
+      f"BM25 ranking is {ranking(bm25_score, QUERY)}, expected [2, 3, 0, 1, 5, 4]"
+  )
+  assert ranking(linear_tfidf, QUERY) == [1, 3, 0, 2, 5, 4], (
+      "sanity: plain tf-idf should rank document 1 first"
+  )
+  assert ranking(bm25_score, QUERY) != ranking(linear_tfidf, QUERY), (
+      "the two rankings are identical, so the corrections are not being applied"
+  )
+
+  # A term the document lacks contributes nothing rather than raising.
+  assert bm25_score(4, ["hold"]) == 0.0, (
+      "document 4 contains no 'hold', so it should score zero for that term"
+  )
+
+hints:
+  - "Two changes to one line: the numerator gains a (k1 + 1) factor, and the denominator appears at all."
+  - "`total += IDF[t] * f * (k1 + 1) / (f + k1 * (1 - b + b * LENS[doc] / AVGDL))`"
+  - "`LENS[doc]` is this document's length; `AVGDL` is the collection average."
+
+solution: |
+  def bm25_score(doc, terms, k1=1.5, b=0.75):
+      """BM25 score of a document for a list of query terms."""
+      total = 0.0
+      for t in terms:
+          f = TF[doc].get(t, 0)
+          if not f:
+              continue
+          denom = f + k1 * (1 - b + b * LENS[doc] / AVGDL)
+          total += IDF[t] * f * (k1 + 1) / denom
+      return total

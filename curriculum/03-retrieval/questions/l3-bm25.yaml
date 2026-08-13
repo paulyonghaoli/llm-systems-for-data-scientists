@@ -1,0 +1,273 @@
+id: ret-l3
+lesson: modules/03-retrieval/03-bm25
+title: "3.3 - BM25"
+questions:
+  - id: q1
+    type: single
+    difficulty: easy
+    prompt: >-
+      What do BM25's two extra terms add over plain idf-weighted term
+      frequency?
+    options:
+      - text: "Saturation of term frequency, and normalisation by document length."
+        correct: true
+        explanation: >-
+          The numerator's `(k1 + 1)` factor with `f` in the denominator bounds
+          any single term's contribution; the `b` term scales that denominator
+          by document length relative to the collection average. Everything
+          else is the same idea as TF-IDF.
+      - text: "Stopword removal and stemming."
+        explanation: >-
+          Neither is part of BM25. Stopword removal is a preprocessing choice
+          that this lesson shows is worth 15 points, and it sits outside the
+          formula entirely.
+      - text: "A learned weighting of query terms."
+        explanation: >-
+          Nothing in BM25 is learned. `k1` and `b` are chosen by the engineer,
+          which is exactly why they need sweeping against labelled queries.
+      - text: "Normalisation of the score into a probability."
+        explanation: >-
+          BM25 scores are unbounded and not comparable across queries. Only the
+          ranking within one query is meaningful.
+
+  - id: q2
+    type: single
+    difficulty: hard
+    prompt: >-
+      Plain BM25 scored exactly 0.00 on the multi-hop queries, which all
+      contain a consignment identifier appearing in just one document. How is
+      that possible when a rare term's idf is enormous?
+    options:
+      - text: "The score is a sum over query terms, and a dozen common words matching short documents outweighed the one rare term."
+        correct: true
+        explanation: >-
+          Those queries are mostly function words, the shortest documents in
+          the corpus are FAQs, and length normalisation rewards short documents
+          for matching anything. Every such query returned the same five FAQs
+          regardless of the identifier in it.
+      - text: "The identifier was not in the index."
+        explanation: >-
+          It was — the gold document ranked between 26 and 152, so the term
+          contributed. It simply did not contribute enough to reach the top ten.
+      - text: "Rare terms are down-weighted to avoid overfitting to typos."
+        explanation: >-
+          The Robertson idf does the opposite: it gives a term in one document
+          of 2,419 a weight around 7.4, against 1.1 for one in half of them.
+      - text: "Multi-hop queries need two documents and recall requires both."
+        explanation: >-
+          Recall@k here counts finding *any* gold document, so needing two is
+          not what produced the zero.
+
+  - id: q3
+    type: multi
+    difficulty: medium
+    prompt: >-
+      Removing corpus-derived stopwords moved recall@10 from 0.551 to 0.705.
+      Which statements about that result are supported by the measurement?
+    options:
+      - text: "The gain is statistically significant — 31 queries won against 4 lost."
+        correct: true
+        explanation: >-
+          At p = 3.5e-06 this is not a marginal effect. It is one of the
+          largest single changes measured anywhere in this module.
+      - text: "Multi-hop queries went from 0.00 to 1.00."
+        correct: true
+        explanation: >-
+          Nothing about those queries changed except that common words stopped
+          being scored, and that was the whole difference between never finding
+          the document and always finding it.
+      - text: "Near-duplicate queries got worse, from 0.37 to 0.23."
+        correct: true
+        explanation: >-
+          Six depot handbooks are around ninety per cent identical, and part of
+          what distinguished them was common vocabulary. Deleting it deleted
+          the distinction. Anything that removes information removes some you
+          wanted.
+      - text: "Vocabulary-mismatch queries improved substantially."
+        explanation: >-
+          They stayed at 0.03. Those queries share almost no vocabulary with
+          their answers, so no amount of filtering the shared vocabulary helps.
+      - text: "It shows stopword removal is always the right default."
+        explanation: >-
+          One query class improved to 1.00 and another degraded by 14 points.
+          The honest report is a distribution over query types, not an average.
+
+  - id: q4
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why should a stopword list be derived from document frequency rather than
+      imported?
+    options:
+      - text: "The uninformative terms are domain-specific — here 'consignment' is in every document and no English list contains it."
+        correct: true
+        explanation: >-
+          A term in every document distinguishes nothing, whatever language it
+          belongs to. An imported list keeps the domain noise and may delete
+          general words that would have discriminated in your collection.
+      - text: "Imported lists are usually out of date."
+        explanation: >-
+          Function words are stable. The problem is not staleness, it is that a
+          general list cannot know what is uninformative in your corpus.
+      - text: "Derived lists are smaller and therefore faster."
+        explanation: >-
+          The derived list here is larger — 108 terms — and speed is not the
+          consideration.
+      - text: "Because BM25 requires the stopword list to match the idf calculation."
+        explanation: >-
+          Any consistent choice works arithmetically. The question is which
+          choice retrieves better.
+
+  - id: q5
+    type: single
+    difficulty: hard
+    prompt: >-
+      Sweeping `b` gave recall of 0.653 at 0.0, 0.574 at 0.25, 0.665 at 0.5 and
+      0.705 at 0.75. A paired test on 0.25 against 0.75 gave p = 0.0003. What
+      do you conclude?
+    options:
+      - text: "The non-monotonicity is real, so `b` has to be swept rather than reasoned about."
+        correct: true
+        explanation: >-
+          Partial length normalisation is worse here than either ignoring
+          length or normalising fully, which no description of the parameter
+          would predict. At 31 queries won against 8 lost, this is not noise.
+      - text: "The dip at 0.25 is sampling noise on 176 queries."
+        explanation: >-
+          That was the reasonable prior and the test rejects it. This is why
+          the sweep is accompanied by a paired test rather than eyeballed.
+      - text: "`b` should always be set to 0.75."
+        explanation: >-
+          It is best *here*, which you can only know by measuring. The
+          neighbouring value is thirteen points worse on this same corpus.
+      - text: "The BM25 implementation must be wrong, since the curve should be smooth."
+        explanation: >-
+          Nothing requires recall to vary smoothly with a parameter. Recall is
+          a step function of rank crossings, and rankings can reorder abruptly.
+
+  - id: q6
+    type: single
+    difficulty: medium
+    prompt: >-
+      BM25 reaches 0.551 and dense retrieval 0.614 on the same 176 queries.
+      Either-one-finds-it reaches 0.739. What does that gap mean?
+    options:
+      - text: "The two methods fail on different queries, so combining them has real headroom — 12.5 points above the better one alone."
+        correct: true
+        explanation: >-
+          22 queries are found only by BM25 and 33 only by dense. Neither is a
+          subset of the other, which is the precondition for hybrid retrieval
+          to be worth building rather than an article of faith.
+      - text: "Dense retrieval is 6 points better, so BM25 can be retired."
+        explanation: >-
+          Retiring it loses the 22 queries only it answers, and the component
+          that keeps working when the embedding service does not.
+      - text: "A hybrid system would reach 0.739."
+        explanation: >-
+          0.739 is a *ceiling* assuming perfect fusion — knowing which
+          retriever to trust per query. A real fusion rule gets somewhere below
+          it, which is what lesson 3.4 measures.
+      - text: "46 queries are unanswerable and should be removed from the benchmark."
+        explanation: >-
+          They have gold documents that neither retriever found at k = 10.
+          Removing hard queries from a benchmark is how a benchmark stops being
+          informative.
+
+  - id: q7
+    type: numeric
+    difficulty: medium
+    prompt: >-
+      A term appears in 1 of 2,419 documents. Using idf = ln(1 + (N - n + 0.5)
+      / (n + 0.5)), what is its idf, to one decimal place?
+    answer: 7.4
+    tolerance: 0.15
+    explanation: >-
+      ln(1 + 2418.5/1.5) = ln(1613.3) ≈ 7.39. Compare a term in half the
+      collection, which scores about 1.1 — that ratio of roughly seven is the
+      entire discriminating power of the method, and it is why deleting common
+      terms costs so little.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why is a lexical index cheap for a specific query and expensive for a
+      vague one, when dense retrieval costs the same either way?
+    options:
+      - text: "Scoring loops over the postings list of each query term, so a rare term touches few documents and a common one touches many."
+        correct: true
+        explanation: >-
+          The cost profile is the mirror image of dense search, which pays a
+          full scan regardless. It is also why stopword removal helps
+          performance as well as quality — the most expensive terms are the
+          least useful ones.
+      - text: "Because rare terms have higher idf and higher idf is faster to compute."
+        explanation: >-
+          The idf is a single lookup whatever its value. The cost is in how
+          many documents the term appears in.
+      - text: "Because the index caches specific queries."
+        explanation: >-
+          No caching is involved; the asymmetry is structural.
+      - text: "It is not — both are linear in corpus size."
+        explanation: >-
+          Dense search is linear in corpus size. Lexical search is linear in
+          the number of documents containing your terms, which for a rare term
+          is a handful.
+
+  - id: q9
+    type: single
+    difficulty: hard
+    prompt: >-
+      A query contains three terms that appear nowhere in the corpus. What does
+      BM25 return?
+    options:
+      - text: "Whatever matched the remaining terms, ranked confidently, with nothing to indicate the others were ignored."
+        correct: true
+        explanation: >-
+          A term with no idf entry contributes exactly zero and raises nothing.
+          This silent degradation is why a lexical system needs an explicit
+          check on how much of the query actually matched, rather than trusting
+          that a returned result means a successful retrieval.
+      - text: "An empty result set."
+        explanation: >-
+          Only if *every* term is unknown. Partial vocabulary coverage returns
+          partial results that look identical to full ones.
+      - text: "An error, since the terms are not in the vocabulary."
+        explanation: >-
+          Nothing raises. That is the problem.
+      - text: "Results ranked by the closest matching terms."
+        explanation: >-
+          BM25 has no notion of closeness between terms — a term either matches
+          exactly or contributes nothing. That is the gap dense retrieval fills.
+
+  - id: q10
+    type: single
+    difficulty: hard
+    prompt: >-
+      Gate 25 uses a BM25 with no stopword removal to assert that lexical
+      retrieval fails on the vocabulary-mismatch queries. Why is that worth
+      re-checking against a stronger BM25, and what happened when it was?
+    options:
+      - text: "A weak baseline makes a phenomenon look real when it is only an artefact — re-run with stopword removal, the checks held at 97% and 100%."
+        correct: true
+        explanation: >-
+          The claim "lexical retrieval cannot do this" is only as strong as the
+          lexical retriever used to test it. Here the planted phenomena survive
+          a substantially better baseline, so the corpus is not resting on a
+          strawman. That check was prompted by noticing the multi-hop zero.
+      - text: "It is not worth re-checking, since gate 25 defines its own baseline."
+        explanation: >-
+          A gate defining its own weak baseline is exactly how a measurement
+          becomes circular. What the gate asserts is a claim about lexical
+          retrieval in general.
+      - text: "Because gate 25 should use the strongest available retriever."
+        explanation: >-
+          Deliberately not — a tuned retriever would make the result a
+          statement about the tuning. The plain baseline is the right choice
+          *provided* the conclusion survives a stronger one, which is why it
+          was verified separately rather than assumed.
+      - text: "It was re-checked and the vocabulary-mismatch phenomenon disappeared."
+        explanation: >-
+          It held at 0.03 recall either way. Those queries share almost no
+          vocabulary with their answers, so filtering shared vocabulary changes
+          nothing.

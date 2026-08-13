@@ -79,6 +79,21 @@ written out in `verify_corpus.py` rather than imported, so these numbers depend
 on nothing outside this repository — and a tuned retriever would make "BM25
 fails here" a statement about the tuning rather than about the corpus.
 
+### The baseline is plain on purpose, and that was checked
+
+A gate asserting "lexical retrieval cannot do this" is only as strong as the
+lexical retriever it used, and `verify_corpus.py`'s BM25 does no stopword
+removal — which lesson 3.3 shows costs it 15 points overall and takes the
+multi-hop queries to **zero**. That raised a fair question about whether the
+planted phenomena were real or were artefacts of a weak baseline.
+
+Re-run against a stopword-removing BM25, gate 25's two lexical checks hold:
+the gold document is outside the top 5 for **97%** of vocabulary-mismatch
+queries (threshold 50%) and the top-1 is a non-gold document for **100%** of
+lexical-distractor queries (threshold 50%). The phenomena survive a
+substantially stronger baseline, so the plain retriever stays — a tuned one
+would make the result a statement about the tuning.
+
 ### Why `topic_distinctness` exists
 
 It is the only check here that is not about a query, and it was added after

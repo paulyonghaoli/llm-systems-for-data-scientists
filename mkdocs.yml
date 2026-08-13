@@ -97,3 +97,4 @@ nav:
       - Overview: modules/03-retrieval/index.md
       - "3.1 Embedding geometry": modules/03-retrieval/01-embedding-geometry.md
       - "3.2 Exact and approximate search": modules/03-retrieval/02-exact-and-approximate.md
+      - "3.3 BM25": modules/03-retrieval/03-bm25.md
