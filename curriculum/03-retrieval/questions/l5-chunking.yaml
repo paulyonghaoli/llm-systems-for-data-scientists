@@ -1,0 +1,275 @@
+id: ret-l5
+lesson: modules/03-retrieval/05-chunking
+title: "3.5 - Chunking"
+questions:
+  - id: q1
+    type: single
+    difficulty: hard
+    prompt: >-
+      Chunking reduced recall@10 from 0.614 to 0.358 on this corpus. What is
+      the correct conclusion?
+    options:
+      - text: "Chunking costs something measurable, and this corpus cannot show the benefit because only 1.3% of its documents exceed the embedding budget."
+        correct: true
+        explanation: >-
+          Chunking exists to stop long documents having their tails discarded.
+          31 documents of 2,419 are over the limit here, so the mechanism that
+          justifies chunking is nearly absent while its cost is fully present.
+          A result measured where the mechanism does not apply is not evidence
+          about the mechanism.
+      - text: "Chunking reduces retrieval quality and should be avoided."
+        explanation: >-
+          This is the overgeneralisation the lesson is built to prevent. On a
+          corpus of long documents the comparison would look completely
+          different, because the discarded tails would contain answers.
+      - text: "The embedding model is too weak to handle chunked text."
+        explanation: >-
+          The same model embeds both. What changed is the number of competing
+          units and how much context each carries.
+      - text: "The chunk sizes tested were all too small."
+        explanation: >-
+          The largest tested was 510 tokens, the model's entire usable budget.
+          There is no larger chunk available.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why does splitting 2,419 documents into 7,082 chunks hurt retrieval, when
+      each chunk is a more focused piece of text?
+    options:
+      - text: "A document is ranked by its best chunk, and a maximum over more samples rises for every document — including the 2,418 wrong ones."
+        correct: true
+        explanation: >-
+          Chunking does not give the right document more chances to match; it
+          gives everything it competes against more chances each. The measured
+          recall follows the total unit count rather than the chunk size as
+          such, which is what this account predicts.
+      - text: "Chunks lose the document's title, which carries most of the signal."
+        explanation: >-
+          The first chunk retains any title. The cost appears across all
+          chunkings including 510 tokens, where nearly every document is a
+          single chunk.
+      - text: "Embedding quality degrades on short text."
+        explanation: >-
+          Short text embeds fine — the queries themselves are short. The
+          problem is competition between units, not the quality of any one.
+      - text: "Overlapping chunks double-count the same evidence."
+        explanation: >-
+          Under max-pooling, duplicate evidence changes nothing: the maximum of
+          two copies of a score is that score. It would matter under
+          sum-pooling.
+
+  - id: q3
+    type: multi
+    difficulty: medium
+    prompt: >-
+      Sum-pooling chunk scores measured up to 36 points worse than max-pooling.
+      Which statements about pooling are supported?
+    options:
+      - text: "Sum-pooling rewards documents for having many chunks, which is a length bias."
+        correct: true
+        explanation: >-
+          Every chunk adds something, so a long document accumulates score
+          regardless of relevance. It reintroduces exactly the bias BM25's `b`
+          parameter exists to remove, in a system that had none.
+      - text: "Max-pooling lets a single lucky chunk carry a whole document."
+        correct: true
+        explanation: >-
+          That is its own bias, and it is the lesser one here — it is also part
+          of why a reranker earns its place in lesson 3.6.
+      - text: "Mean-pooling penalises a document for its irrelevant parts."
+        correct: true
+        explanation: >-
+          A document with one excellent chunk and two poor ones averages badly,
+          even though the excellent chunk is the best evidence available. The
+          tier-3 exercise shows this burying the strongest document.
+      - text: "The pooling rule matters less than the chunk size."
+        explanation: >-
+          At 256/64 the pooling choice moved recall from 0.568 to 0.205 — a
+          larger swing than any chunk-size change measured.
+      - text: "Pooling is only needed when chunks overlap."
+        explanation: >-
+          It is needed whenever a document has more than one chunk, overlapping
+          or not, because the ranking is over documents.
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      A chunker with size 256 and overlap 64 emits spans ending
+      (768, 1000) and then (960, 1000) for a 1,000-token document. What is
+      wrong and what does it cost?
+    options:
+      - text: "The second span is nested inside the first — a duplicate unit that is embedded, indexed and competes with its own document."
+        correct: true
+        explanation: >-
+          Once a chunk reaches the end of the document there is nothing left to
+          cover. Without that check, every document whose length is not a
+          multiple of the step gains a redundant trailing chunk, which inflates
+          the index and adds no information.
+      - text: "Nothing — overlapping spans are the point of overlap."
+        explanation: >-
+          Overlap means consecutive chunks share a boundary region. A span
+          entirely contained in another is not overlap, it is duplication.
+      - text: "The final chunk is too short to embed meaningfully."
+        explanation: >-
+          Short chunks embed fine. The problem is that this one is a copy of
+          text already indexed.
+      - text: "Coverage is incomplete, so some tokens are unreachable."
+        explanation: >-
+          Coverage is complete — (768, 1000) already reaches the end. The extra
+          span adds nothing rather than filling a gap.
+
+  - id: q5
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why must chunk size be measured in model tokens rather than characters or
+      words?
+    options:
+      - text: "The constraint being respected is the model's position budget, and the character-to-token ratio varies with the text."
+        correct: true
+        explanation: >-
+          900 characters is comfortably inside 512 tokens for English prose and
+          well outside it for dense code or non-Latin scripts. Chunking by
+          characters and hoping is how documents end up truncated despite
+          having been chunked to avoid exactly that.
+      - text: "Because embedding models charge per token."
+        explanation: >-
+          Cost is real and is not the issue: the issue is silent truncation of
+          anything past the position limit.
+      - text: "Because character counts are not portable between languages."
+        explanation: >-
+          True in spirit and imprecise — the portability that matters is to the
+          model's own tokenizer, which is the thing enforcing the limit.
+      - text: "It does not matter as long as you are consistent."
+        explanation: >-
+          Consistency does not help if the consistent value exceeds the limit,
+          which is what a character-based rule cannot guarantee.
+
+  - id: q6
+    type: single
+    difficulty: hard
+    prompt: >-
+      The 510-token chunking scored 0.585 against 0.614 for whole documents — a
+      much smaller gap than the other chunkings. Why?
+    options:
+      - text: "At 510 tokens nearly every document becomes exactly one chunk, so the index is almost the unchunked index."
+        correct: true
+        explanation: >-
+          2,450 chunks from 2,419 documents is 1.01 per document. The residual
+          gap comes from the 31 documents that did split and from the transform
+          being refitted on a slightly different population.
+      - text: "510 tokens is the optimal chunk size for this embedding model."
+        explanation: >-
+          It is the best of the tested chunkings and still worse than not
+          chunking. "Best available option" and "optimal" are different claims.
+      - text: "Larger chunks carry more context, which always helps."
+        explanation: >-
+          Directionally true here and it is not a law: a chunk larger than the
+          model's budget would be truncated, which is worse than splitting.
+      - text: "The overlap was zero, which avoids duplicate evidence."
+        explanation: >-
+          The 256-token chunking also had a zero-overlap variant, and it scored
+          0.409. Overlap is not what separates these.
+
+  - id: q7
+    type: numeric
+    difficulty: medium
+    prompt: >-
+      Using size 256 and overlap 64, how many chunks does a 1,000-token
+      document produce? Answer as a whole number.
+    answer: 5
+    tolerance: 0.5
+    explanation: >-
+      Consecutive chunks advance by 256 − 64 = 192, so they start at 0, 192,
+      384, 576 and 768. The chunk starting at 768 reaches the end, so there is
+      nothing left to cover — a sixth chunk at 960 would be nested inside the
+      fifth.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      You are adding chunking to a system that already applies lesson 3.1's
+      centre-and-project transform, fitted on the document vectors. What must
+      change?
+    options:
+      - text: "Refit the transform on the chunk vectors — chunks and documents are different populations with different means."
+        correct: true
+        explanation: >-
+          The mean of 7,082 chunks is not the mean of 2,419 documents, and
+          applying one population's correction to another is the mismatch
+          lesson 3.1 warns about. It is easy to miss because nothing errors.
+      - text: "Nothing — the transform is a property of the model, not the corpus."
+        explanation: >-
+          It is fitted from the corpus vectors, which is exactly why it is
+          stored beside the index and versioned with it.
+      - text: "Disable the transform, since it was tuned for document-length text."
+        explanation: >-
+          It still helps at chunk level; it just has to be fitted to what is
+          being indexed.
+      - text: "Apply the document transform to chunks but not to queries."
+        explanation: >-
+          Applying a transform to one side of a comparison and not the other is
+          the one-sided-transform bug from lesson 3.1.
+
+  - id: q9
+    type: single
+    difficulty: hard
+    prompt: >-
+      The lesson predicted chunking would help the 40 queries whose gold
+      document is truncated, and it did not — both scored 0.525 at 510 tokens.
+      How should that be reported?
+    options:
+      - text: "As a falsified prediction, noting that it is a property of where the answers sit in these documents rather than a general fact."
+        correct: true
+        explanation: >-
+          Whatever the discarded tails contain, it is not the answers to these
+          queries. That is a fact about how this corpus was generated. Reporting
+          it as "chunking does not help truncated documents" would extend a
+          corpus artefact into a claim about retrieval.
+      - text: "As evidence that truncation does not matter in practice."
+        explanation: >-
+          It is evidence that truncation did not matter for 40 queries on one
+          synthetic corpus. Truncation removes text; whether that text was
+          needed is a property of the documents.
+      - text: "By dropping the split, since it did not produce a result."
+        explanation: >-
+          A prediction that fails is a result. Removing the analysis that
+          disagreed with the hypothesis is the failure mode the whole
+          curriculum is arranged against.
+      - text: "By increasing the chunk overlap until the effect appears."
+        explanation: >-
+          Adjusting the method until a hypothesis is confirmed is how a
+          measurement stops meaning anything.
+
+  - id: q10
+    type: single
+    difficulty: medium
+    prompt: >-
+      Your corpus is legal contracts averaging 40,000 tokens. What does this
+      lesson's table tell you to do?
+    options:
+      - text: "Chunk — the cost measured here is real but the benefit it cannot show is exactly what dominates at that length."
+        correct: true
+        explanation: >-
+          At 40,000 tokens all but the first 510 are discarded without
+          chunking, so the choice is not "chunk or not" but "chunk or index
+          1.3% of each document". The table's costs still apply and are small
+          against that.
+      - text: "Do not chunk, since chunking cost up to 26 points here."
+        explanation: >-
+          That number was measured on documents averaging 377 tokens, where
+          chunking splits text that already fitted. Transferring it to a
+          40,000-token corpus is the generalisation the lesson warns against.
+      - text: "Use 128-token chunks, since more chunks give better coverage of a long document."
+        explanation: >-
+          The measured cost grows as chunks shrink. Prefer the largest chunk
+          that fits the budget.
+      - text: "Summarise each contract and index the summaries instead."
+        explanation: >-
+          A legitimate technique with a different failure mode — the summary
+          may omit the clause being searched for — and not something this
+          lesson's measurement speaks to.

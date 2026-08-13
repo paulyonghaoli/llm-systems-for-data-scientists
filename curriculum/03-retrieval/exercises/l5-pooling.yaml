@@ -1,0 +1,106 @@
+id: ret-l5-pooling
+title: "Pooling chunk scores, and the length bias you reintroduce"
+lesson: modules/03-retrieval/05-chunking
+description: |
+  Once a corpus is chunked, retrieval scores chunks and the answer is a
+  document, so something has to turn several chunk scores back into one
+  document score. That choice is rarely stated and it decides the ranking.
+
+  `CHUNK_SCORES` holds three documents' chunk similarities for one query.
+  Document `docA` has one strong chunk at 0.81. Document `docB` has four
+  mediocre ones between 0.73 and 0.77 and nothing good. `docC` has a single
+  chunk at 0.79.
+
+  Write `rank_documents`, which pools with `max` and ranks best first. The
+  starter pools with `sum`.
+
+  Compare what they produce. Sum-pooling puts `docB` first with 2.99, purely
+  because it has four chunks — it is ranking by length wearing the costume of
+  relevance, and it is the same bias BM25's `b` parameter exists to remove.
+  §G measures this on the real corpus, where sum-pooling costs up to 36 points.
+
+setup_code: |
+  # Chunk-level similarities for one query, grouped by document.
+  CHUNK_SCORES = {
+      "docA": [0.81, 0.42, 0.39],              # one strong chunk
+      "docB": [0.77, 0.75, 0.74, 0.73],        # four mediocre chunks
+      "docC": [0.79],                          # a single good chunk
+  }
+
+  def pooled_score(scores, how):
+      """Collapse one document's chunk scores under a named rule."""
+      if how == "max":
+          return max(scores)
+      if how == "sum":
+          return sum(scores)
+      if how == "mean":
+          return sum(scores) / len(scores)
+      raise ValueError("unknown pooling rule: " + repr(how))
+
+starter_code: |
+  def rank_documents(chunk_scores, how="max", limit=None):
+      """Document ids ranked best first, pooling their chunk scores."""
+      # Bug: ignores `how` and always sums, so a document with many weak
+      # chunks outranks one with a single strong chunk.
+      scored = [(sum(scores), doc) for doc, scores in chunk_scores.items()]
+      scored.sort(key=lambda pair: (-pair[0], pair[1]))
+      out = [doc for _, doc in scored]
+      return out[:limit] if limit else out
+
+
+  print("max-pooled:", rank_documents(CHUNK_SCORES, "max"))
+  print("sum-pooled:", rank_documents(CHUNK_SCORES, "sum"))
+
+tests: |
+  by_max = rank_documents(CHUNK_SCORES, "max")
+  assert by_max == ["docA", "docC", "docB"], (
+      f"max-pooling should rank ['docA', 'docC', 'docB'] on their best chunks "
+      f"(0.81, 0.79, 0.77), got {by_max}"
+  )
+
+  by_sum = rank_documents(CHUNK_SCORES, "sum")
+  assert by_sum == ["docB", "docA", "docC"], (
+      f"sum-pooling should rank ['docB', 'docA', 'docC'], got {by_sum}"
+  )
+
+  # The result the exercise is about.
+  assert by_max[0] == "docA" and by_sum[0] == "docB", (
+      "the two rules must disagree on the winner — docB has no chunk better "
+      "than 0.77 and leads on sum only because it has four of them"
+  )
+
+  # `how` has to be honoured, not ignored.
+  by_mean = rank_documents(CHUNK_SCORES, "mean")
+  assert by_mean == ["docC", "docB", "docA"], (
+      f"mean-pooling should rank ['docC', 'docB', 'docA'] — the averages are "
+      f"0.790, 0.7475 and 0.540 — got {by_mean}. Note that mean-pooling buries "
+      "docA, whose single 0.81 chunk is the best evidence available anywhere: "
+      "averaging punishes a document for its irrelevant parts."
+  )
+
+  # Ties break on the document id so the ranking is reproducible.
+  tied = rank_documents({"b": [0.5], "a": [0.5]}, "max")
+  assert tied == ["a", "b"], f"equal scores must break on the id, got {tied}"
+
+  assert rank_documents(CHUNK_SCORES, "max", limit=2) == ["docA", "docC"], (
+      "limit must truncate the ranking"
+  )
+
+  # A single-chunk document must score identically under max and sum, or the
+  # pooling rule is doing something other than pooling.
+  one = {"only": [0.6]}
+  assert rank_documents(one, "max") == rank_documents(one, "sum") == ["only"]
+
+hints:
+  - "`pooled_score` is provided and already implements all three rules. Use it."
+  - "`[(pooled_score(scores, how), doc) for doc, scores in chunk_scores.items()]`"
+  - "The sorting and tie-break are already correct — only the score is wrong."
+
+solution: |
+  def rank_documents(chunk_scores, how="max", limit=None):
+      """Document ids ranked best first, pooling their chunk scores."""
+      scored = [(pooled_score(scores, how), doc)
+                for doc, scores in chunk_scores.items()]
+      scored.sort(key=lambda pair: (-pair[0], pair[1]))
+      out = [doc for _, doc in scored]
+      return out[:limit] if limit else out

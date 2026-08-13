@@ -45,6 +45,7 @@ system, they are what closes a gap this large.
 2. [3.2 Exact and approximate search](02-exact-and-approximate.md) — **available**
 3. [3.3 BM25, and why the old baseline still wins](03-bm25.md) — **available**
 4. [3.4 Hybrid retrieval, and what fusion really recovers](04-hybrid-fusion.md) — **available**
+5. [3.5 Chunking, and the benefit this corpus cannot show](05-chunking.md) — **available**
 
-Lessons 3.5–3.8 (chunking, reranking, groundedness and citation, retrieval
-metrics) are in progress.
+Lessons 3.6–3.8 (reranking, groundedness and citation, retrieval metrics) are
+in progress.

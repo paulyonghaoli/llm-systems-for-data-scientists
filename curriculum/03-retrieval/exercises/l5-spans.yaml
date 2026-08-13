@@ -1,0 +1,121 @@
+id: ret-l5-spans
+title: "Chunk spans, and the duplicate nobody notices"
+lesson: modules/03-retrieval/05-chunking
+description: |
+  Produce the `(start, end)` spans that cover a document of `n_tokens`, given a
+  chunk size and an overlap.
+
+  Consecutive chunks advance by `size - overlap`, and the last chunk stops at
+  the end of the document. The starter has the arithmetic right and stops one
+  chunk too late.
+
+  Run it on a 1,000-token document at size 256 with overlap 64. The correct
+  answer is five spans ending `(768, 1000)`. The starter produces six, the last
+  being `(960, 1000)` — a span entirely contained in the one before it. That
+  duplicate gets embedded, indexed, and competes against the document it came
+  from, and nothing anywhere reports an error.
+
+  With no overlap the bug is invisible on any document whose length divides
+  evenly, which is how it survives review.
+
+setup_code: |
+  def covers(spans, n_tokens):
+      """True if the spans together cover every token position."""
+      seen = set()
+      for start, end in spans:
+          seen.update(range(start, end))
+      return seen == set(range(n_tokens))
+
+  def contained(spans):
+      """Spans that lie entirely inside an earlier span."""
+      out = []
+      for i, (s, e) in enumerate(spans):
+          for j, (s2, e2) in enumerate(spans):
+              if i != j and j < i and s >= s2 and e <= e2:
+                  out.append((s, e))
+                  break
+      return out
+
+starter_code: |
+  def chunk_spans(n_tokens, size, overlap=0):
+      """(start, end) spans covering a document of n_tokens."""
+      if size <= 0 or overlap >= size:
+          raise ValueError("overlap must be smaller than size")
+      step = size - overlap
+      spans, start = [], 0
+      while start < n_tokens:
+          spans.append((start, min(start + size, n_tokens)))
+          # Bug: keeps stepping once a chunk has already reached the end, so a
+          # document whose length is not a multiple of step gains a final span
+          # nested inside the previous one.
+          start += step
+      return spans or [(0, 0)]
+
+
+  print("1000 @ 256/0 :", chunk_spans(1000, 256))
+  print("1000 @ 256/64:", chunk_spans(1000, 256, 64))
+  print("nested spans :", contained(chunk_spans(1000, 256, 64)))
+
+tests: |
+  # The case the bug shows up on.
+  got = chunk_spans(1000, 256, 64)
+  assert got == [(0, 256), (192, 448), (384, 640), (576, 832), (768, 1000)], (
+      f"chunk_spans(1000, 256, 64) returned {got}. Expected five spans ending "
+      "(768, 1000) — once a chunk reaches the end of the document there is "
+      "nothing left to cover."
+  )
+  assert contained(got) == [], (
+      f"these spans contain a nested duplicate: {contained(got)}. A span lying "
+      "entirely inside an earlier one is indexed as its own unit and competes "
+      "with the document it came from."
+  )
+
+  # No overlap, exact multiple: the bug is invisible here, which is why it survives.
+  assert chunk_spans(1000, 256) == [(0, 256), (256, 512), (512, 768), (768, 1000)], (
+      "with no overlap the spans should tile the document exactly"
+  )
+
+  # Coverage is the point of chunking: no token may be dropped.
+  for n, size, ov in ((1000, 256, 64), (300, 128, 32), (500, 256, 64), (77, 32, 8)):
+      spans = chunk_spans(n, size, ov)
+      assert covers(spans, n), (
+          f"chunk_spans({n}, {size}, {ov}) = {spans} does not cover every token; "
+          "a gap means text that can never be retrieved"
+      )
+      assert contained(spans) == [], (
+          f"chunk_spans({n}, {size}, {ov}) contains nested spans: {contained(spans)}"
+      )
+
+  # A document shorter than one chunk is one chunk.
+  assert chunk_spans(100, 256) == [(0, 100)], "a short document is a single span"
+
+  # An empty document must still produce a unit, or it leaves the index entirely.
+  assert chunk_spans(0, 128) == [(0, 0)], (
+      "an empty document should yield one empty span rather than no spans — "
+      "no spans means the document silently disappears from the index"
+  )
+
+  # Overlap must actually overlap.
+  spans = chunk_spans(300, 128, 32)
+  assert spans[1][0] < spans[0][1], (
+      f"consecutive chunks should overlap by 32 tokens, got {spans[:2]}"
+  )
+
+hints:
+  - "Once a chunk's end has reached n_tokens, there is nothing left to cover."
+  - "After appending, check `if start + size >= n_tokens: break`."
+  - "The step arithmetic is already correct — only the loop's exit is wrong."
+
+solution: |
+  def chunk_spans(n_tokens, size, overlap=0):
+      """(start, end) spans covering a document of n_tokens."""
+      if size <= 0 or overlap >= size:
+          raise ValueError("overlap must be smaller than size")
+      step = size - overlap
+      spans, start = [], 0
+      while start < n_tokens:
+          spans.append((start, min(start + size, n_tokens)))
+          if start + size >= n_tokens:
+              break
+          start += step
+      return spans or [(0, 0)]
