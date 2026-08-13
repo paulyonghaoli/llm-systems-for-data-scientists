@@ -362,6 +362,7 @@ CI was red. `tools/check_one.py <exercise-id>` is the way to iterate on one item
 | 26 | **Gate 25 can fail** — nine mutations each destroy one phenomenon, and gate 25 must catch every one | a check that has only ever passed, which is indistinguishable from a check that cannot fail |
 | 27 | **Embedding fixture** — shapes, row order and int8 fidelity hold, and dense retrieval beats BM25 on the vocabulary-mismatch slice | a fixture whose rows have drifted out of line with the corpus, and wrong pooling — which still produces unit-norm vectors that merely retrieve worse |
 | 28 | **No stray control characters in prose** — a tab, formfeed or bell in a lesson is an un-escaped LaTeX backslash a Python string literal ate | maths that renders as garbage while word count, sections, components and every other gate stay green |
+| 29 | **The widget's markdown renderer protects code spans** — `mdLite` is exercised under node against the cases that broke it | an exponent inside backticks pairing its `**` with a real bold marker later in the text, bolding across the `<code>` boundary; the source YAML is valid markdown and no other gate can see it |
 
 Gates 12–18 are specific to this subject; 1–11, 19–20 and 22 are inherited; 21 and 23 are ours from the sibling robotics curriculum.
 

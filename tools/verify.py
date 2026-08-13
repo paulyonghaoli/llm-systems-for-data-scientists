@@ -54,6 +54,10 @@ GATES: list[tuple[str, list[str], Path]] = [
     # vocabulary mismatch BM25 cannot — which is also the sharpest test that
     # the pooling is right, since wrong pooling still yields unit vectors
     ("27 embedding fixture", [PY, "tools/verify_embeddings.py"], ROOT),
+    # 29 the widget's markdown renderer protects code spans — an exponent
+    # inside backticks used to pair its ** with a real ** later in the text
+    # and bold everything between, which nothing else could see
+    ("29 mdLite renderer", [PY, "tools/gate_mdlite.py"], ROOT),
     # 07 nav coverage and orphans live here too
     ("19 audit", [PY, "tools/audit.py"], ROOT),
 ]

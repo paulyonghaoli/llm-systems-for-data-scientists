@@ -35,12 +35,36 @@
   }
 
   // Minimal markdown: escapes HTML, then renders `code`, **bold**, newlines.
-  // MathJax \( \) spans pass through untouched and are typeset afterwards.
+  // MathJax spans pass through untouched and are typeset afterwards.
+  //
+  // Code spans are lifted out before the bold pass and put back afterwards.
+  // Markdown treats a code span's contents as literal and running the bold
+  // regex over the whole string does not: an exponent inside backticks, like
+  // `f**K`, had its ** paired with a real ** later in the text, so the bold
+  // ran from inside the <code> element out into the surrounding prose and
+  // swallowed everything between. Substituting first and scanning second is
+  // the bug; lifting out first is what a real renderer does.
+  var CODE_MARK = String.fromCharCode(0xE000);
+
   function mdLite(text) {
     var h = String(text)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    h = h.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+    // A private-use character cannot appear in the escaped text above, which
+    // is what makes it safe as a placeholder delimiter.
+    var spans = [];
+    h = h.replace(/`([^`]+)`/g, function (_, code) {
+      spans.push(code);
+      return CODE_MARK + (spans.length - 1) + CODE_MARK;
+    });
+
     h = h.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+
+    var restore = new RegExp(CODE_MARK + "(\\d+)" + CODE_MARK, "g");
+    h = h.replace(restore, function (_, i) {
+      return "<code>" + spans[Number(i)] + "</code>";
+    });
+
     return h.replace(/\n/g, "<br>");
   }
 

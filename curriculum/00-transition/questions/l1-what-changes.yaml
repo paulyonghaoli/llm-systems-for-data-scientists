@@ -93,7 +93,7 @@ questions:
       how many attempts does each *successful* request cost on average? (Two
       decimal places.)
     explanation: >-
-      (1 - 0.2**3) / (1 - 0.2) = 1.24 attempts per request, divided by a
+      `(1 - 0.2**3) / (1 - 0.2)` = 1.24 attempts per request, divided by a
       99.2% success rate, gives 1.25. The limit cancels out of this
       expression entirely - 1 / (1 - f) - so the answer is the same for a
       limit of 3 or 30.
