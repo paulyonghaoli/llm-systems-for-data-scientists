@@ -1,0 +1,268 @@
+id: ret-l6
+lesson: modules/03-retrieval/06-reranking
+title: "3.6 - Reranking"
+questions:
+  - id: q1
+    type: single
+    difficulty: hard
+    prompt: >-
+      The same reranker over the same lexical run improved recall@1 from 0.051
+      to 0.250 (p = 1e-08) and recall@10 from 0.705 to 0.727 (p = 0.22). What
+      is going on?
+    options:
+      - text: "A reranker reorders candidates, so its effect lives in position — recall@10 asks about set membership, which the reordering barely changes."
+        correct: true
+        explanation: >-
+          Both numbers are correctly computed from the same experiment. The
+          metric determines whether the effect is visible at all, which is why
+          a team standardised on recall@10 would measure this reranker, find
+          nothing, and conclude cross-encoders are not worth the latency.
+      - text: "The reranker is overfitting to the top of the list."
+        explanation: >-
+          Nothing is fitted here — the cross-encoder was trained on MS MARCO and
+          has never seen this corpus. It simply moves correct answers upward
+          within the candidates it was given.
+      - text: "recall@1 is a noisier metric, so its improvement is less trustworthy."
+        explanation: >-
+          The opposite is indicated: recall@1 gave p = 1e-08 on the same 176
+          queries where recall@10 gave p = 0.22. The rank-1 result is the better
+          supported of the two.
+      - text: "The candidate depth was too shallow for recall@10 to improve."
+        explanation: >-
+          The candidates contain the gold document 94.9% of the time, well above
+          either recall figure. Depth is not what is binding.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why can a cross-encoder not simply replace the first-stage retriever?
+    options:
+      - text: "There is no document vector to index — it scores a pair, so every candidate costs a forward pass at query time."
+        correct: true
+        explanation: >-
+          A bi-encoder embeds each document once, ahead of time, so query time
+          is a matrix multiply. A cross-encoder needs the query present to
+          produce any representation at all, which is exactly why it is more
+          accurate and why it cannot be precomputed.
+      - text: "Cross-encoders are less accurate than bi-encoders on long documents."
+        explanation: >-
+          They are considerably more accurate — that is the whole reason to pay
+          for the second stage.
+      - text: "Cross-encoder scores are not comparable across queries."
+        explanation: >-
+          True, and not the obstacle: ranking within one query is all that is
+          needed. The obstacle is cost.
+      - text: "Because the corpus would have to be re-embedded on every model change."
+        explanation: >-
+          That is a real cost of bi-encoders, and it is an argument *for*
+          cross-encoders rather than against them.
+
+  - id: q3
+    type: single
+    difficulty: hard
+    prompt: >-
+      Reranking transformed the lexical run and did nothing measurable for the
+      dense run (p between 0.5 and 0.65 at every cutoff). What explains the
+      difference?
+    options:
+      - text: "A reranker's value is proportional to how badly ordered its input is, and the lexical run's recall@1 was 0.051 against the dense run's 0.205."
+        correct: true
+        explanation: >-
+          Gate 25 established that BM25's top-ranked result is a non-gold
+          distractor for 94% of the distractor queries by construction, so the
+          lexical run had enormous room to be reordered. The dense run arrives
+          already reasonably ordered and there is far less to fix.
+      - text: "The dense candidates were of lower quality."
+        explanation: >-
+          Dense recall@10 is lower overall, but its *ordering* at the top is
+          four times better, and ordering is what a reranker acts on.
+      - text: "The cross-encoder and the bi-encoder were trained on similar data, so they agree."
+        explanation: >-
+          Plausible-sounding and not what the measurement shows: they were
+          trained differently, and agreement at the top is a property of this
+          run rather than of the training.
+      - text: "The dense run had fewer candidates to rerank."
+        explanation: >-
+          Both first stages contributed a top 50, so the depth is the same.
+
+  - id: q4
+    type: multi
+    difficulty: medium
+    prompt: >-
+      Which of these follow from the fact that a reranker can only reorder?
+    options:
+      - text: "Its ceiling is the first stage's recall at the candidate depth."
+        correct: true
+        explanation: >-
+          Here the candidates contain the answer 94.9% of the time, and nothing
+          the reranker does can exceed that.
+      - text: "The first stage should be tuned for recall rather than precision."
+        correct: true
+        explanation: >-
+          Anything the first stage drops is unrecoverable, and precision is the
+          second stage's job. A first stage tuned to put the right thing first
+          has often dropped candidates the reranker would have rescued.
+      - text: "Reducing candidate depth reduces the reranker's ceiling."
+        correct: true
+        explanation: >-
+          Fewer candidates means more queries whose answer was never passed to
+          the reranker at all. It is the obvious latency dial and its cost is
+          invisible in metrics that do not look at the candidate tail.
+      - text: "It can recover documents the first stage ranked below the candidate depth."
+        explanation: >-
+          It cannot. A document not in the candidate list does not exist as far
+          as the reranker is concerned.
+      - text: "Its scores can be thresholded to decide whether to answer at all."
+        explanation: >-
+          The logits are unbounded and not comparable across queries, so a
+          fixed threshold is arbitrary. Abstention needs calibration, which
+          this lesson does not provide.
+
+  - id: q5
+    type: single
+    difficulty: hard
+    prompt: >-
+      A reranking implementation defaults missing scores to 0.0. Cross-encoder
+      logits in this corpus run from about −11 to +2. What happens?
+    options:
+      - text: "Any candidate the reranker never scored outranks nearly everything it did score and rejected."
+        correct: true
+        explanation: >-
+          The scale is not centred on zero — most documents score well below
+          it. This surfaces when candidate sets are assembled from more
+          retrievers than were sent for scoring, which is routine, and it
+          silently promotes exactly the documents nobody vouched for.
+      - text: "Nothing — unscored candidates land in the middle of the ranking."
+        explanation: >-
+          That would be true if the scores were centred on zero. They are not:
+          zero is near the top of this range.
+      - text: "The unscored candidates are dropped from the results."
+        explanation: >-
+          `dict.get` with a default returns the default rather than dropping
+          the item, so they stay and are ranked.
+      - text: "It raises a KeyError on the first missing document."
+        explanation: >-
+          A default is exactly what prevents that. The problem is that it fails
+          silently instead.
+
+  - id: q6
+    type: numeric
+    difficulty: medium
+    prompt: >-
+      Six queries. The gold document is at position 2, 1, 3, 4, 5 and absent.
+      What is MRR@5, to three decimal places?
+    answer: 0.381
+    tolerance: 0.004
+    explanation: >-
+      (1/2 + 1/1 + 1/3 + 1/4 + 1/5 + 0) / 6 = 2.283/6 = 0.381. Recall@5 for the
+      same six queries is 0.833, and it cannot distinguish this from an ordering
+      where every answer sits at position 5 — which is exactly the blindness
+      that hides a reranker.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: >-
+      Your application shows the user three results. Which metric should gate
+      changes to the reranker?
+    options:
+      - text: "Something measured at k = 3, because that is the operating point the user experiences."
+        correct: true
+        explanation: >-
+          You would not evaluate a fraud model at a threshold you never use.
+          Measured here, the same reranking is worth 0.333 at k = 3 and 0.000
+          at k = 5 — the choice of cutoff decides the conclusion.
+      - text: "recall@10, since it is the standard and allows comparison with published results."
+        explanation: >-
+          Comparability is worth something and it is not worth measuring a
+          quantity nobody experiences. Report both if you need the comparison.
+      - text: "MRR over the full candidate list, since it uses all the information."
+        explanation: >-
+          Better than recall@10 here, and it still credits improvements below
+          position three that no user will ever see.
+      - text: "Whichever metric the reranker improves most."
+        explanation: >-
+          Choosing the metric after seeing which one flatters the change is how
+          a measurement stops meaning anything.
+
+  - id: q8
+    type: single
+    difficulty: hard
+    prompt: >-
+      The candidates contain the gold document for 94.9% of queries and the
+      best reranked configuration reaches 0.801 at k = 10. What does that gap
+      tell you?
+    options:
+      - text: "The reranker is imperfect within its candidates — it is more accurate than the retriever and it is not an oracle."
+        correct: true
+        explanation: >-
+          14.8 points sit between what the candidate set makes possible and
+          what the reranker achieves. Worth remembering before treating
+          cross-encoder scores as ground truth, for instance when using one to
+          label training data.
+      - text: "The candidate depth should be increased."
+        explanation: >-
+          Depth controls the 94.9%, which is already well above what is being
+          achieved. Deepening raises a ceiling that is not currently binding.
+      - text: "The first stage is dropping relevant documents."
+        explanation: >-
+          It is retaining them 94.9% of the time. The loss is in the reordering
+          stage, not the retrieval stage.
+      - text: "The gold labels are unreliable."
+        explanation: >-
+          Possible in general; here the labels were recorded when each query was
+          written and verified by gate 25.
+
+  - id: q9
+    type: single
+    difficulty: medium
+    prompt: >-
+      Latency is over budget in a reranked system. What does cutting candidate
+      depth from 50 to 10 cost?
+    options:
+      - text: "It lowers the reranker's ceiling — queries whose answer sat between rank 10 and 50 can no longer be rescued."
+        correct: true
+        explanation: >-
+          This is lesson 3.2's `nprobe` failure one stage later: the obvious
+          dial, a linear saving, and damage that is invisible in any metric not
+          examining the candidate tail. Measure the first stage's recall at the
+          new depth before accepting it.
+      - text: "Nothing, since the reranker reorders and the top 10 is what is served."
+        explanation: >-
+          The reranker's job is precisely to move things *into* the top 10 from
+          further down. Restricting candidates to 10 removes the material it
+          works with.
+      - text: "It improves precision by removing weak candidates."
+        explanation: >-
+          The reranker already demotes weak candidates. Removing them earlier
+          only removes the strong ones sitting alongside them.
+      - text: "It makes the cross-encoder scores less reliable."
+        explanation: >-
+          Each pair is scored independently, so the scores are unchanged. Only
+          the set being scored shrinks.
+
+  - id: q10
+    type: single
+    difficulty: hard
+    prompt: >-
+      Which claim about this lesson's results would be unsupported?
+    options:
+      - text: "Adding a cross-encoder reranker reliably improves retrieval quality."
+        correct: true
+        explanation: >-
+          It did nothing measurable for the dense run at any cutoff, at any
+          significance level. The gain depends on how badly ordered the first
+          stage is, which is empirical and will not survive a change of
+          retriever. "Add a reranker" is not advice that applies uniformly.
+      - text: "Reranking a poorly-ordered first stage can multiply rank-1 accuracy several times over."
+        explanation: >-
+          Supported: 0.051 to 0.250 on the lexical run, at p = 1e-08.
+      - text: "The cutoff at which you measure can invert the conclusion about a reranker."
+        explanation: >-
+          Supported directly: p = 5.8e-11 at rank five and p = 0.22 at rank ten
+          for the same change.
+      - text: "A reranker's ceiling is set by the candidate list it is given."
+        explanation: >-
+          Supported, and it follows from the definition — reranking is a
+          reordering of its input.

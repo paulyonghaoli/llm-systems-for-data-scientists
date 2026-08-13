@@ -1,0 +1,100 @@
+id: ret-l6-rerank
+title: "Reranking, and the default that floats unscored documents"
+lesson: modules/03-retrieval/06-reranking
+description: |
+  Reorder a candidate list by cross-encoder score.
+
+  `CANDIDATES` came from two retrievers merged together. `SCORES` holds the
+  reranker's relevance logits — and `d6` is not in it, because whichever
+  retriever contributed it was not part of the batch that got scored. That
+  happens routinely once candidate sets are assembled from more than one
+  source.
+
+  The starter defaults a missing score to `0.0`, which looks neutral and is
+  not. These logits are *mostly negative*: an irrelevant document in the real
+  corpus scores around −10, and only genuinely relevant ones go above zero. A
+  default of 0.0 therefore ranks an unscored document above every document the
+  model actually looked at and rejected.
+
+  Run it and compare. The correct ordering puts `d6` last; the starter puts it
+  **second**, ahead of four documents the reranker read and scored.
+
+setup_code: |
+  # Candidates from two merged retrievers, in first-stage order.
+  CANDIDATES = ["d1", "d2", "d3", "d4", "d5", "d6"]
+
+  # Cross-encoder logits. Unbounded, mostly negative, and d6 is absent.
+  SCORES = {
+      "d1": -8.2,
+      "d2": 1.9,
+      "d3": -9.9,
+      "d4": -0.4,
+      "d5": -11.3,
+  }
+
+  def scored_only(candidates, scores):
+      """The candidates the reranker actually saw."""
+      return [d for d in candidates if d in scores]
+
+starter_code: |
+  def rerank(candidates, scores, limit=None, missing=0.0):
+      """Reorder candidates by reranker score, best first."""
+      # Bug: `missing` defaults to 0.0. The scale is not centred on zero —
+      # most documents score well below it — so an unscored candidate
+      # outranks nearly everything that was genuinely evaluated.
+      ranked = sorted(candidates, key=lambda d: (-scores.get(d, missing), d))
+      return ranked[:limit] if limit else ranked
+
+
+  print("reranked  :", rerank(CANDIDATES, SCORES))
+  print("scored set:", scored_only(CANDIDATES, SCORES))
+
+tests: |
+  got = rerank(CANDIDATES, SCORES)
+  assert got == ["d2", "d4", "d1", "d3", "d5", "d6"], (
+      f"reranked order is {got}, expected ['d2', 'd4', 'd1', 'd3', 'd5', 'd6'] "
+      "— descending by score, with the unscored d6 last"
+  )
+
+  # The point of the exercise.
+  assert got[-1] == "d6", (
+      f"d6 has no score and must sink to the bottom, but it ranked "
+      f"{got.index('d6') + 1} of {len(got)}. A document the reranker never "
+      "evaluated should not outrank documents it evaluated and rejected."
+  )
+
+  # Every scored document keeps its score order.
+  scored = [d for d in got if d in SCORES]
+  assert scored == sorted(scored, key=lambda d: -SCORES[d]), (
+      f"the scored documents are out of order: {scored}"
+  )
+
+  # A caller who knows their scale can still say so.
+  above = rerank(CANDIDATES, SCORES, missing=5.0)
+  assert above[0] == "d6", (
+      "an explicit missing=5.0 should place the unscored document first — the "
+      "parameter must still be honoured, it is only the default that was wrong"
+  )
+
+  assert rerank(CANDIDATES, SCORES, limit=3) == ["d2", "d4", "d1"], "limit must truncate"
+
+  # Deterministic on ties.
+  tied = rerank(["b", "a"], {"a": 1.0, "b": 1.0})
+  assert tied == ["a", "b"], f"equal scores must break on the id, got {tied}"
+
+  # Reranking cannot invent candidates.
+  assert set(rerank(CANDIDATES, SCORES)) == set(CANDIDATES), (
+      "the reranked list must contain exactly the candidates it was given — a "
+      "reranker reorders, it does not retrieve"
+  )
+
+hints:
+  - "What score should a document the model never saw be given?"
+  - "Anything below the lowest real score works; the lesson uses -99.0."
+  - "Change only the default value of `missing` — the sorting is already correct."
+
+solution: |
+  def rerank(candidates, scores, limit=None, missing=-99.0):
+      """Reorder candidates by reranker score, best first."""
+      ranked = sorted(candidates, key=lambda d: (-scores.get(d, missing), d))
+      return ranked[:limit] if limit else ranked

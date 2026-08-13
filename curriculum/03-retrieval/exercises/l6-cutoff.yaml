@@ -1,0 +1,127 @@
+id: ret-l6-cutoff
+title: "The same change, measured at three cutoffs"
+lesson: modules/03-retrieval/06-reranking
+description: |
+  `BEFORE` and `AFTER` hold six queries' result lists from one first stage,
+  without and with reranking. The gold document is `"g"` every time.
+
+  Write `recall_at_k` and `mrr_at_k`, then read what they say about the same
+  six queries:
+
+  - at `k = 1` reranking adds **0.500**
+  - at `k = 3` it adds **0.333**
+  - at `k = 5` it adds **exactly nothing**
+
+  Nothing about the reranker changes between those rows. Every number is
+  correctly computed. The only thing that changes is the question being asked,
+  and at `k = 5` the question happens to be one this reranker does not affect
+  — the answer was already in the top five for the same five queries, just
+  further down.
+
+  MRR sees what recall@5 cannot, moving from 0.381 to 0.750, because it is
+  sensitive to position rather than to membership. §G measures the identical
+  pattern on the real corpus, where the change is significant at p = 5.8e-11 at
+  rank five and p = 0.22 at rank ten.
+
+setup_code: |
+  # Six queries' ranked results, before and after reranking. Gold is "g".
+  BEFORE = [
+      ["x", "g", "a", "b", "c"],
+      ["g", "a", "b", "c", "d"],
+      ["a", "b", "g", "c", "d"],
+      ["a", "b", "c", "g", "d"],
+      ["a", "b", "c", "d", "g"],
+      ["a", "b", "c", "d", "e"],     # the reranker never finds this one
+  ]
+  AFTER = [
+      ["g", "x", "a", "b", "c"],
+      ["g", "a", "b", "c", "d"],
+      ["g", "a", "b", "c", "d"],
+      ["g", "a", "b", "c", "d"],
+      ["a", "g", "b", "c", "d"],
+      ["a", "b", "c", "d", "e"],
+  ]
+  GOLD = "g"
+
+starter_code: |
+  def recall_at_k(runs, gold, k):
+      """Fraction of queries with the gold document in the top k."""
+      # Bug: slices AFTER testing membership, so every call behaves like k =
+      # len(run) and the cutoff has no effect at all.
+      return sum(1 for r in runs if gold in r) / len(runs)
+
+
+  def mrr_at_k(runs, gold, k):
+      """Mean reciprocal rank of the first correct result within the top k."""
+      total = 0.0
+      for r in runs:
+          for i, d in enumerate(r[:k], start=1):
+              if d == gold:
+                  total += 1 / i
+                  break
+      return total / len(runs)
+
+
+  for k in (1, 3, 5):
+      b, a = recall_at_k(BEFORE, GOLD, k), recall_at_k(AFTER, GOLD, k)
+      print(f"recall@{k}: {b:.3f} -> {a:.3f}  ({a - b:+.3f})")
+  print(f"MRR@5   : {mrr_at_k(BEFORE, GOLD, 5):.4f} -> {mrr_at_k(AFTER, GOLD, 5):.4f}")
+
+tests: |
+  # The cutoff has to be a cutoff.
+  assert abs(recall_at_k(BEFORE, GOLD, 1) - 1 / 6) < 1e-9, (
+      f"recall@1 on BEFORE should be {1/6:.3f} — only query 2 has the gold "
+      f"document first — got {recall_at_k(BEFORE, GOLD, 1):.3f}. If you got "
+      "0.833, membership is being tested before the list is truncated."
+  )
+  assert abs(recall_at_k(BEFORE, GOLD, 3) - 0.5) < 1e-9
+  assert abs(recall_at_k(BEFORE, GOLD, 5) - 5 / 6) < 1e-9
+
+  assert abs(recall_at_k(AFTER, GOLD, 1) - 4 / 6) < 1e-9, (
+      f"recall@1 on AFTER should be {4/6:.3f}, got {recall_at_k(AFTER, GOLD, 1):.3f}"
+  )
+
+  # The result the exercise exists for.
+  gains = {k: recall_at_k(AFTER, GOLD, k) - recall_at_k(BEFORE, GOLD, k)
+           for k in (1, 3, 5)}
+  assert abs(gains[1] - 0.5) < 1e-9, f"recall@1 should gain 0.500, got {gains[1]:+.3f}"
+  assert abs(gains[3] - 1 / 3) < 1e-9, f"recall@3 should gain 0.333, got {gains[3]:+.3f}"
+  assert abs(gains[5]) < 1e-9, (
+      f"recall@5 should gain exactly 0.000, got {gains[5]:+.3f}. The same "
+      "reranking that adds 0.500 at rank 1 is invisible at rank 5, because "
+      "every answer it moved was already inside the top five."
+  )
+
+  # MRR sees what recall@5 cannot.
+  before_mrr, after_mrr = mrr_at_k(BEFORE, GOLD, 5), mrr_at_k(AFTER, GOLD, 5)
+  assert abs(before_mrr - 0.3806) < 1e-3, f"MRR@5 on BEFORE should be 0.381, got {before_mrr:.4f}"
+  assert abs(after_mrr - 0.75) < 1e-9, f"MRR@5 on AFTER should be 0.750, got {after_mrr:.4f}"
+  assert after_mrr - before_mrr > 0.3, (
+      "MRR should show a large gain at the same cutoff where recall shows none"
+  )
+
+  # Recall is monotone in k; a metric that is not has a bug.
+  for runs in (BEFORE, AFTER):
+      vals = [recall_at_k(runs, GOLD, k) for k in (1, 2, 3, 4, 5)]
+      assert vals == sorted(vals), f"recall must not decrease as k grows: {vals}"
+
+hints:
+  - "`recall_at_k` never uses `k`. Compare it with `mrr_at_k`, which does."
+  - "`gold in r[:k]`"
+  - "`mrr_at_k` is already correct — do not change it."
+
+solution: |
+  def recall_at_k(runs, gold, k):
+      """Fraction of queries with the gold document in the top k."""
+      return sum(1 for r in runs if gold in r[:k]) / len(runs)
+
+
+  def mrr_at_k(runs, gold, k):
+      """Mean reciprocal rank of the first correct result within the top k."""
+      total = 0.0
+      for r in runs:
+          for i, d in enumerate(r[:k], start=1):
+              if d == gold:
+                  total += 1 / i
+                  break
+      return total / len(runs)

@@ -1,0 +1,13 @@
+{
+  "recorded_on": "2026-08-13",
+  "model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+  "revision": "233902d25c440f23af6f7d6e94d2946bac0bee0a",
+  "licence": "apache-2.0",
+  "kind": "cross-encoder relevance logit",
+  "candidate_depth_per_retriever": 50,
+  "max_tokens": 512,
+  "onnxruntime_version": "1.28.0",
+  "n_queries": 176,
+  "n_pairs": 13799,
+  "note": "Relevance logits for the union of each retriever's top 50 candidates, recorded once by experiments/record_reranker.py. Never called at test time. Higher is more relevant; the scale is unbounded and not comparable across models."
+}
