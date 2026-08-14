@@ -1,0 +1,189 @@
+id: agt-l1-guard
+title: "The layer validation cannot provide"
+lesson: modules/04-agents/01-tool-calling-protocol
+description: |
+  All four adversarial calls in the lesson pass every validator, because
+  `"notes/../../etc/passwd"` is a string where a string was declared. A schema
+  constrains **type**; these attacks are carried in **content**, so the only
+  thing between them and the operation they name is a guard inside the tool.
+
+  Write that guard.
+
+  `is_contained(path)` returns whether a path stays inside `notes/`. It is a
+  question about the *shape* of the path, not about which files happen to
+  exist, so a legal path to a file that is not there is still contained.
+
+  Then fix `read_file` so it returns an envelope rather than raising. A tool
+  that raises into the agent loop ends the episode; one that returns
+  `{"ok": False, "error": ...}` gives the model something it can read and
+  recover from, which is what lesson 4.2 measures.
+
+  The starter's guard is `path.startswith("notes/")`, which is the check
+  everyone writes first and which `notes/../../etc/passwd` satisfies.
+
+setup_code: |
+  #: The sandbox's "filesystem".
+  FILES = {
+      "notes/depot.txt": "North-east depot. Exceptions bay is bay 4.",
+      "notes/policy.txt": "A hold lasts up to 48 hours.",
+      "notes/readme.txt": "Operational notes. Do not distribute.",
+  }
+
+  #: What the model is told read_file accepts. Note what it can and cannot say:
+  #: `path` is a string, and every attack below is also a string.
+  READ_FILE_SPEC = {
+      "name": "read_file",
+      "parameters": {"path": {"type": "string", "required": True}},
+  }
+
+  #: Schema-perfect calls that should never execute.
+  ADVERSARIAL = [
+      "notes/../../etc/passwd",
+      "notes/../secret.txt",
+      "/etc/shadow",
+      "notes\\..\\secret.txt",
+  ]
+
+  #: Ordinary calls that must keep working.
+  LEGITIMATE = ["notes/depot.txt", "notes/policy.txt", "notes/readme.txt"]
+
+  def validate_call(spec, args):
+      """Every problem with a proposed call; an empty list means safe to run.
+
+      Takes a spec dict shaped like READ_FILE_SPEC and an argument dict;
+      returns a list of strings. This is the finished validator from the
+      previous exercise, and it is here to be measured rather than fixed.
+      """
+      problems = []
+      for name in sorted({k for k, v in spec["parameters"].items() if v.get("required")}
+                         - set(args)):
+          problems.append(f"missing required argument '{name}'")
+      for name in sorted(set(args) - set(spec["parameters"])):
+          problems.append(f"unexpected argument '{name}'")
+      for name, value in sorted(args.items()):
+          declared = spec["parameters"].get(name)
+          if declared is not None and declared["type"] == "string" \
+                  and not isinstance(value, str):
+              problems.append(f"argument '{name}' should be string")
+      return problems
+
+starter_code: |
+  def is_contained(path):
+      """Whether this path stays inside notes/. A question about shape, not existence."""
+      # The check everyone writes first, and the one every traversal defeats:
+      # "notes/../../etc/passwd" starts with "notes/".
+      return path.startswith("notes/")
+
+
+  def read_file(path):
+      """Read a file under notes/, as an envelope the agent can act on."""
+      # Two problems. It raises into the agent loop instead of returning a
+      # result, and a path that is legal but absent raises a different
+      # exception again.
+      if not is_contained(path):
+          raise PermissionError(f"path escapes the sandbox: {path!r}")
+      return FILES[path]
+
+
+  for p in ADVERSARIAL:
+      passes = not validate_call(READ_FILE_SPEC, {"path": p})
+      print(f"{p:<28} validation: {'PASSES' if passes else 'rejected':<8} "
+            f"guard: {'allows' if is_contained(p) else 'blocks'}")
+
+tests: |
+  # The framing this exercise exists for: validation is untouched by all of it.
+  for p in ADVERSARIAL:
+      assert validate_call(READ_FILE_SPEC, {"path": p}) == [], (
+          f"{p!r} should pass validation cleanly -- it is a string where a "
+          "string was declared, which is the whole point"
+      )
+
+  for p in ADVERSARIAL:
+      assert not is_contained(p), (
+          f"the guard allows {p!r}. Every one of these passes validation, so "
+          "the guard is the only thing standing between a generated string and "
+          "the file it names -- and `startswith(\"notes/\")` is satisfied by a "
+          "path that climbs straight back out again."
+      )
+
+  for p in LEGITIMATE:
+      assert is_contained(p), f"the guard blocks the ordinary path {p!r}"
+
+  # Not a blocklist: a traversal the exercise never showed you must fail too.
+  for p in ("notes/sub/../../etc/passwd", "notes/./../etc/passwd",
+            "notes/a/b/../../../etc/passwd", "../notes/depot.txt"):
+      assert not is_contained(p), (
+          f"the guard allows {p!r}. Matching the four strings in ADVERSARIAL "
+          "is not a guard, it is a blocklist -- and the next path the model "
+          "invents is not on it."
+      )
+
+  # Containment is about shape, so a legal path to a file that is not there is
+  # still contained; whether it exists is read_file's problem, not the guard's.
+  assert is_contained("notes/new.txt"), (
+      "a well-formed path under notes/ is contained whether or not the file "
+      "exists -- conflating the two puts a filesystem lookup inside a check "
+      "that is supposed to run before anything touches the filesystem"
+  )
+
+  # And a prefix is not a parent directory.
+  for p in ("notesdir/x.txt", "notes", "notes/", "/notes/depot.txt"):
+      assert not is_contained(p), f"the guard allows {p!r}, which is not a file under notes/"
+
+  # read_file returns an envelope, always.
+  ok = read_file("notes/depot.txt")
+  assert isinstance(ok, dict) and ok.get("ok") is True, (
+      f"read_file returned {ok!r}; a successful read should come back as "
+      "{'ok': True, 'value': ...} so every outcome has the same shape"
+  )
+  assert "bay 4" in ok["value"], f"the file contents are missing from {ok!r}"
+
+  for p in ADVERSARIAL:
+      try:
+          res = read_file(p)
+      except Exception as e:
+          raise AssertionError(
+              f"read_file({p!r}) raised {type(e).__name__}. An exception ends "
+              "the episode; an envelope gives the model an error it can read "
+              "and a chance to correct the call."
+          ) from None
+      assert res.get("ok") is False, f"read_file({p!r}) reported success: {res!r}"
+      assert res.get("error"), f"a failure envelope needs an error the model can read: {res!r}"
+
+  try:
+      missing = read_file("notes/absent.txt")
+  except Exception as e:
+      raise AssertionError(
+          f"read_file on a legal but absent path raised {type(e).__name__}. "
+          "A missing file is an ordinary outcome, not a crash."
+      ) from None
+  assert missing.get("ok") is False, f"an absent file is not a success: {missing!r}"
+
+hints:
+  - "Split the path on `/` and look at the segments, rather than at the string."
+  - >-
+    A segment of `..`, `.` or the empty string disqualifies the path wherever it
+    appears; so does a backslash anywhere, and a leading `/`.
+  - "The first segment must be exactly `notes`, and there must be a segment after it."
+  - >-
+    In `read_file`, check containment, then check membership in FILES, and
+    return a failure envelope for both rather than raising.
+
+solution: |
+  def is_contained(path):
+      """Whether this path stays inside notes/. A question about shape, not existence."""
+      if not isinstance(path, str) or "\\" in path or path.startswith("/"):
+          return False
+      parts = path.split("/")
+      if any(part in ("", ".", "..") for part in parts):
+          return False
+      return len(parts) >= 2 and parts[0] == "notes"
+
+
+  def read_file(path):
+      """Read a file under notes/, as an envelope the agent can act on."""
+      if not is_contained(path):
+          return {"ok": False, "error": f"path escapes the sandbox: {path!r}"}
+      if path not in FILES:
+          return {"ok": False, "error": f"no such file: {path!r}"}
+      return {"ok": True, "value": FILES[path]}

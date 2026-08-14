@@ -1,0 +1,323 @@
+id: agt-l1
+lesson: modules/04-agents/01-tool-calling-protocol
+title: "4.1 - The tool-calling protocol"
+questions:
+  - id: q1
+    type: single
+    difficulty: easy
+    prompt: >-
+      Across all four validators in the lesson's table, the `adversarial_value`
+      row reads 0.00. What does that number mean?
+    options:
+      - text: >-
+          No validator caught any of those calls, because each one is
+          structurally well formed.
+        correct: true
+        explanation: >-
+          The row reports the fraction of the class each validator rejects, so
+          0.00 means none were rejected. `{"path": "notes/../../etc/passwd"}` is
+          a string where a string was declared: there is nothing for a schema to
+          object to.
+      - text: "The validators caught all of them, and 0.00 is the miss rate."
+        correct: false
+        explanation: >-
+          The table reports rejections, not misses. The `unknown_tool` row reads
+          1.00 for the same reason — every layer catches it.
+      - text: "The class contains no calls, so the fraction is undefined and prints as zero."
+        correct: false
+        explanation: >-
+          There are four adversarial calls, shown in the `n` column. An empty
+          class would not have produced a row.
+      - text: "Those calls were rejected by the tool, so they never reached a validator."
+        correct: false
+        explanation: >-
+          Validation runs first, and they passed it. The tool's guard is what
+          stopped them afterwards — which is the distinction the row exists to
+          make.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      A tool declares `k` as `{"type": "integer"}` and the validator checks
+      `isinstance(value, int)`. A model proposes `k=True`. What happens?
+    options:
+      - text: >-
+          It passes validation, and `True` then behaves as `1` everywhere
+          downstream without ever looking wrong.
+        correct: true
+        explanation: >-
+          `bool` is a subclass of `int` in Python, so the isinstance check
+          succeeds. This is the `bool_for_int` row: it produces a wrong result
+          rather than an error, which is why it survives review.
+      - text: "It fails validation, because `True` is not an integer."
+        correct: false
+        explanation: >-
+          It is one, as far as `isinstance` is concerned. Catching it needs an
+          explicit `isinstance(value, bool)` test placed *before* the type check.
+      - text: "It fails at execution time with a TypeError."
+        correct: false
+        explanation: >-
+          `True` supports every integer operation, so nothing raises. The
+          failure is silent.
+      - text: "Python coerces it to `1` and emits a DeprecationWarning."
+        correct: false
+        explanation: >-
+          No coercion or warning occurs. `True` simply *is* an int, by
+          inheritance.
+
+  - id: q3
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why does `validate_call` return every problem with a proposed call rather
+      than the first one it finds?
+    options:
+      - text: >-
+          Each correction costs a model call, so reporting one defect at a time
+          turns one mistake into several round trips.
+        correct: true
+        explanation: >-
+          The error message is not a diagnostic for a developer, it is the
+          repair signal that goes back into the model's context. A model told
+          about one of three errors fixes one of three.
+      - text: "Because returning early would leave the validator in an inconsistent state."
+        correct: false
+        explanation: >-
+          The function is pure and holds no state; an early return is perfectly
+          safe. The argument is about cost, not correctness.
+      - text: "Because the JSON Schema specification requires exhaustive error reporting."
+        correct: false
+        explanation: >-
+          It does not, and the four-type subset used here is not JSON Schema
+          anyway. The reason is economic.
+      - text: "So that the problems can be sorted, which requires collecting them all."
+        correct: false
+        explanation: >-
+          Sorting is done on the argument names before the problems are built,
+          for determinism. That is a separate concern from how many are returned.
+
+  - id: q4
+    type: single
+    difficulty: medium
+    prompt: >-
+      Three of the four validators admit the `extra_argument` calls — for
+      instance `search(query=..., k=2, rerank=True)`. What is the harm, given
+      that the extra argument is simply ignored?
+    options:
+      - text: >-
+          The model receives no signal that `rerank` does not exist, so it goes
+          on believing behaviour it asked for is happening.
+        correct: true
+        explanation: >-
+          The failure is not a crash but a result that is quietly not what was
+          asked for, and neither the model nor the trajectory records that
+          anything went wrong.
+      - text: "The extra argument is passed to the function and raises a TypeError."
+        correct: false
+        explanation: >-
+          A validator that ignores unexpected arguments generally drops them
+          before execution, so nothing raises. That is exactly the problem.
+      - text: "It is harmless; unknown fields should be ignored for forward compatibility."
+        correct: false
+        explanation: >-
+          Forward compatibility is an argument about *versioned* callers who
+          will eventually be upgraded. The caller here is a generator that will
+          make the same mistake indefinitely unless told.
+      - text: "It inflates the token cost of the call enough to matter at scale."
+        correct: false
+        explanation: >-
+          A few tokens per call is real but trivial next to a silently wrong
+          result.
+
+  - id: q5
+    type: single
+    difficulty: hard
+    prompt: >-
+      Someone proposes tightening the `read_file` schema with a regex on `path`
+      so that traversal strings are rejected at validation time. What is the
+      strongest objection?
+    options:
+      - text: >-
+          A regex strict enough to work encodes a fact about the tool, so it is
+          the guard rewritten in a less readable language and kept somewhere the
+          tool's author will not look.
+        correct: true
+        explanation: >-
+          It closes these four cases, which is worth doing, but it moves the
+          guard rather than removing the need for one — and the next adversarial
+          argument is a search query, which no regex describes.
+      - text: "Regular expressions cannot express path containment at all."
+        correct: false
+        explanation: >-
+          They can express it well enough for this case. The objection is about
+          where the knowledge lives, not about expressive power.
+      - text: "It would reject legitimate paths, raising the false-positive rate."
+        correct: false
+        explanation: >-
+          A correctly written pattern need not. The measured false-positive rate
+          of every layer in the lesson is zero.
+      - text: "Validation runs after execution, so the regex would be too late."
+        correct: false
+        explanation: >-
+          Validation runs first — that is the invariant the experiment checks,
+          and no call executed despite failing it.
+
+  - id: q6
+    type: single
+    difficulty: easy
+    prompt: >-
+      Why does every outcome of `Sandbox.call` — including "no such tool" —
+      come back as `{"ok": False, "error": ...}` rather than as an exception?
+    options:
+      - text: >-
+          An exception ends the episode, while an error the model can read gives
+          it a chance to correct the call.
+        correct: true
+        explanation: >-
+          Recovery is the behaviour lesson 4.2 measures, and it is only possible
+          if the failure reaches the model as content rather than unwinding the
+          loop.
+      - text: "Because exceptions cannot cross the boundary into Pyodide."
+        correct: false
+        explanation: >-
+          They cross it fine. The reason is about what the agent can do with the
+          failure, not about the runtime.
+      - text: "To make the tool faster, since raising is expensive in Python."
+        correct: false
+        explanation: >-
+          Exception cost is irrelevant next to a model call.
+      - text: "So that the calculator's `safe_eval` never has to raise internally."
+        correct: false
+        explanation: >-
+          `safe_eval` does raise; `call` catches it and wraps it. The envelope is
+          the boundary, not the internals.
+
+  - id: q7
+    type: multi
+    difficulty: hard
+    prompt: >-
+      Which of these are true of a tool spec, as the lesson describes it?
+      (Select all that apply.)
+    options:
+      - text: >-
+          It is read by a language model as a prompt and by your program as a
+          contract, and those two jobs pull in different directions.
+        correct: true
+        explanation: >-
+          A spec written only for validation produces a model that calls it
+          badly; one written only for prompting produces calls you cannot safely
+          execute.
+      - text: >-
+          Narrowing a type is safe, while narrowing a description changes what
+          the model does.
+        correct: true
+        explanation: >-
+          The type is only ever read by the validator; the description is what
+          determines whether the model reaches for this tool at the right moment.
+      - text: >-
+          The model should be shown the same schema the validator enforces.
+        correct: true
+        explanation: >-
+          A description that promises something the validator rejects generates
+          rejected calls, and the model has no way to discover the discrepancy
+          except by failing.
+      - text: >-
+          A sufficiently precise spec removes the need for guards inside the
+          tools.
+        correct: false
+        explanation: >-
+          The `adversarial_value` row is 0.00 under every layer. Validation
+          covers form completely and content not at all.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      `safe_eval` parses the expression to an AST and honours five node types,
+      rather than calling `eval` with a restricted `__builtins__`. Why?
+    options:
+      - text: >-
+          Restricted-`eval` sandboxes have been escaped repeatedly, because the
+          restriction is a blocklist over a language that keeps offering new
+          routes out.
+        correct: true
+        explanation: >-
+          An allowlist of AST node types inverts the burden: anything not
+          explicitly honoured raises, including a name, a call, an attribute or
+          a comprehension.
+      - text: "Because `eval` cannot parse arithmetic expressions correctly."
+        correct: false
+        explanation: >-
+          It parses them fine. The objection is about everything *else* it will
+          also happily parse.
+      - text: "Because AST walking is faster than `eval` for short expressions."
+        correct: false
+        explanation: >-
+          It is generally slower. Speed is not the argument.
+      - text: "Because Pyodide does not provide `eval`."
+        correct: false
+        explanation: >-
+          It does. The guard would be necessary in any runtime.
+
+  - id: q9
+    type: single
+    difficulty: hard
+    prompt: >-
+      `safe_eval` rejects `9 ** 9 ** 9` even though every node in it is an
+      honoured type. What class of defect is that check for?
+    options:
+      - text: >-
+          A well-formed call whose cost is unbounded — it is not an error and it
+          will not return.
+        correct: true
+        explanation: >-
+          Availability, not correctness. The expression is arithmetic a model
+          might plausibly emit, and nothing about its structure distinguishes it
+          from a legitimate product.
+      - text: "Code execution, since `**` can be used to reach the interpreter."
+        correct: false
+        explanation: >-
+          Exponentiation reaches nothing; `Call` and `Name` nodes are what the
+          walker refuses for that reason.
+      - text: "A type error, since the result overflows a float."
+        correct: false
+        explanation: >-
+          Python integers are arbitrary-precision, so nothing overflows. The
+          computation simply does not finish.
+      - text: "A schema violation, since the expression exceeds the declared string length."
+        correct: false
+        explanation: >-
+          No length is declared, and the string is short. The problem is what it
+          means, not how long it is.
+
+  - id: q10
+    type: single
+    difficulty: medium
+    prompt: >-
+      Every recorded call carries an `executed` flag. What does that field buy
+      you that the error message does not?
+    options:
+      - text: >-
+          It turns "we validate before executing" from a claim into an invariant
+          a test can assert over a whole trajectory.
+        correct: true
+        explanation: >-
+          It is one boolean, and it is what lets the experiment report that no
+          call executed despite failing validation — a claim otherwise resting
+          on reading the code.
+      - text: "It tells you how long the tool took to run."
+        correct: false
+        explanation: >-
+          Timing is a separate concern, and one the deterministic sandbox
+          deliberately does not model.
+      - text: "It distinguishes a tool that failed from a tool that returned nothing."
+        correct: false
+        explanation: >-
+          The envelope's `ok` field already does that. `executed` answers a
+          different question: whether the function was reached at all.
+      - text: "It lets the model retry the call, by marking which attempts are still pending."
+        correct: false
+        explanation: >-
+          Nothing is pending — every call has completed by the time it is
+          recorded. Retry policy is lesson 4.2's subject.

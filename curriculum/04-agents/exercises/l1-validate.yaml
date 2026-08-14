@@ -1,0 +1,173 @@
+id: agt-l1-validate
+title: "The three bugs in a hand-written validator"
+lesson: modules/04-agents/01-tool-calling-protocol
+description: |
+  `validate_call` is the boundary between a generated string and a function
+  call, and the version in the starter is the one people actually ship. It has
+  three defects, each of which the lesson's table measures:
+
+  - it **returns on the first problem**, so a model that got three arguments
+    wrong is told about one, and each correction costs another model call;
+  - it **ignores arguments the schema never described**, which is the quietest
+    way a call becomes something the published contract does not cover;
+  - it uses `isinstance(value, int)` for an integer argument, and `bool`
+    subclasses `int` in Python, so `k=True` is accepted and then indexes,
+    multiplies and compares exactly like `1`.
+
+  Fix all three. `validate_call(spec, args)` returns a list of every problem
+  with the proposed call, and an empty list means it is safe to execute.
+
+  The `bool_for_int` row is the one worth slowing down for. It is not an exotic
+  case — a model that has been asked for a boolean elsewhere in the same
+  conversation emits one here, the call passes validation, and the failure that
+  results is a wrong answer rather than an error.
+
+setup_code: |
+  #: Argument types a tool may declare.
+  TYPES = {"string": str, "integer": int, "number": (int, float), "boolean": bool}
+
+  #: The published contract for one tool: what it is called, and for each
+  #: argument its type and whether it must be present.
+  SPEC = {
+      "name": "search",
+      "parameters": {
+          "query": {"type": "string", "required": True},
+          "k": {"type": "integer", "required": False},
+      },
+  }
+
+  def required(spec):
+      """The names of the arguments this spec marks as required.
+
+      Takes a spec dict shaped like SPEC; returns a set of argument names.
+      """
+      return {k for k, v in spec["parameters"].items() if v.get("required")}
+
+starter_code: |
+  def validate_call(spec, args):
+      """Every problem with a proposed call; an empty list means safe to run."""
+      if not isinstance(args, dict):
+          return [f"arguments must be an object, got {type(args).__name__}"]
+
+      # Bug 1: returns instead of collecting, so only the first problem is
+      # ever reported.
+      for name in sorted(required(spec) - set(args)):
+          return [f"missing required argument '{name}'"]
+
+      # Bug 2: nothing here looks for arguments the schema never described.
+
+      for name, value in sorted(args.items()):
+          declared = spec["parameters"].get(name)
+          if declared is None:
+              continue
+          # Bug 3: bool is a subclass of int, so True satisfies this check
+          # where an integer was declared.
+          if not isinstance(value, TYPES[declared["type"]]):
+              return [f"argument '{name}' should be {declared['type']}, "
+                      f"got {type(value).__name__}"]
+      return []
+
+
+  for args in ({"query": "hold", "k": 2},
+               {"query": "hold", "k": True},
+               {"query": "hold", "k": 2, "rerank": True},
+               {"k": True, "rerank": 1}):
+      print(f"{str(args):<45} -> {validate_call(SPEC, args)}")
+
+tests: |
+  ok = validate_call(SPEC, {"query": "hold policy", "k": 2})
+  assert ok == [], (
+      f"a well-formed call was rejected with {ok}. A validator with a "
+      "false-positive rate is trading one failure for another; this one should "
+      "have none, because it only compares a call against the tool's own schema."
+  )
+
+  boolean = validate_call(SPEC, {"query": "hold", "k": True})
+  assert boolean, (
+      "search(query='hold', k=True) was accepted. bool subclasses int in "
+      "Python, so isinstance(True, int) is True and the call passes an "
+      "unguarded integer check -- after which True indexes, multiplies and "
+      "compares exactly like 1, so nothing downstream ever looks wrong. Check "
+      "for bool explicitly before the isinstance check."
+  )
+  assert any("k" in p for p in boolean), (
+      f"the boolean problem should name the offending argument, got {boolean}"
+  )
+
+  extra = validate_call(SPEC, {"query": "hold", "k": 2, "rerank": True})
+  assert extra, (
+      "search(query='hold', k=2, rerank=True) was accepted, but the schema "
+      "never described `rerank`. Ignoring it tells the model nothing, so it "
+      "goes on believing a parameter exists and the behaviour it expected "
+      "silently does not happen."
+  )
+  assert len(extra) == 1, f"exactly one problem here -- the extra argument -- got {extra}"
+
+  every = validate_call(SPEC, {"k": True, "rerank": 1})
+  assert len(every) == 3, (
+      f"this call is missing `query`, invents `rerank`, and passes a boolean "
+      f"for an integer: three problems, but {len(every)} came back. Each round "
+      f"trip to the model costs a call, so report all of them at once."
+  )
+
+  # A validator that only *counts* problems is no use to the model reading it.
+  joined = " ".join(every).lower()
+  for token in ("query", "rerank", "k"):
+      assert token in joined, (
+          f"the three problems do not mention {token!r}: {every}. These strings "
+          "go back into the model's context, so they are the whole repair signal."
+      )
+
+  # Argument order must not change the report; identical failures that read
+  # differently defeat caching and make a trajectory diff unreadable.
+  a = validate_call(SPEC, {"k": True, "rerank": 1})
+  b = validate_call(SPEC, {"rerank": 1, "k": True})
+  assert a == b, (
+      f"the same call reported differently depending on dict order:\n  {a}\n  {b}\n"
+      "Sort the names you iterate over."
+  )
+
+  # A float is not an integer, even when it is whole.
+  assert validate_call(SPEC, {"query": "hold", "k": 2.0}), (
+      "k=2.0 should be rejected: `integer` means int, and accepting a float "
+      "here means every consumer of k has to defend against one"
+  )
+
+  # And the spec's own required set is still enforced.
+  assert validate_call(SPEC, {}), "a call with no arguments at all is missing `query`"
+  assert validate_call(SPEC, {"query": "hold"}) == [], (
+      "`k` is optional, so a call that omits it is well formed"
+  )
+
+hints:
+  - "Collect into a list called `problems` and return it once, at the end."
+  - "Unexpected arguments are `set(args) - set(spec['parameters'])`; sort them."
+  - >-
+    For the boolean: test `declared['type'] in ('integer', 'number') and
+    isinstance(value, bool)` *before* the isinstance check, not after — after is
+    too late, because the isinstance check has already passed.
+
+solution: |
+  def validate_call(spec, args):
+      """Every problem with a proposed call; an empty list means safe to run."""
+      if not isinstance(args, dict):
+          return [f"arguments must be an object, got {type(args).__name__}"]
+
+      problems = []
+
+      for name in sorted(required(spec) - set(args)):
+          problems.append(f"missing required argument '{name}'")
+
+      for name in sorted(set(args) - set(spec["parameters"])):
+          problems.append(f"unexpected argument '{name}'")
+
+      for name, value in sorted(args.items()):
+          declared = spec["parameters"].get(name)
+          if declared is None:
+              continue  # already reported as unexpected
+          if declared["type"] in ("integer", "number") and isinstance(value, bool):
+              problems.append(f"argument '{name}' is a boolean, not a {declared['type']}")
+          elif not isinstance(value, TYPES[declared["type"]]):
+              problems.append(f"argument '{name}' should be {declared['type']}, "
+                              f"got {type(value).__name__}")
+      return problems

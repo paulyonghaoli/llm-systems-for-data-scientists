@@ -104,3 +104,6 @@ nav:
       - "3.7 Groundedness and citation": modules/03-retrieval/07-groundedness.md
       - "3.8 Retrieval metrics": modules/03-retrieval/08-retrieval-metrics.md
       - "Mini-project 3: the retrieval evaluation harness": modules/03-retrieval/project-retrieval-eval.md
+  - "Module 4 · Agents & tool use":
+      - Overview: modules/04-agents/index.md
+      - "4.1 The tool-calling protocol": modules/04-agents/01-tool-calling-protocol.md

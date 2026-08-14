@@ -6,6 +6,8 @@ convention.
 """
 
 from llmlab.tokenizer import BPETokenizer, merge, pair_counts, pretokenize
+from llmlab.tools import Sandbox, ToolSpec, safe_eval, validate_call
 
-__all__ = ["BPETokenizer", "merge", "pair_counts", "pretokenize"]
+__all__ = ["BPETokenizer", "Sandbox", "ToolSpec", "merge", "pair_counts",
+           "pretokenize", "safe_eval", "validate_call"]
 __version__ = "0.1.0"

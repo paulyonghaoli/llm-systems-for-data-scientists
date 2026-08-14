@@ -13,21 +13,22 @@ Nothing below is linked until it is actually built.
 ## Course I · Working with LLMs
 
 *Build and evaluate a retrieval or agent feature that survives contact with a
-real user.* ≈ 135 hrs.
+real user.* ≈ 165 hrs.
 
 | Module | Status |
 |---|---|
 | **0 · From data science to LLM systems** | [**complete**](modules/00-transition/index.md) |
 | **1 · Tokens, sampling and the API contract** | [**complete**](modules/01-tokens/index.md) |
 | **2 · Prompting and structured output** | [**complete**](modules/02-prompting/index.md) |
-| 3 · Embeddings, retrieval and RAG | planned |
-| 4 · Agents and tool use | planned |
+| **3 · Embeddings, retrieval and RAG** | [**complete**](modules/03-retrieval/index.md) |
+| 4 · Agents and tool use | [in progress](modules/04-agents/index.md) |
+| 16 · Multimodal systems | planned |
 | **Capstone I · Grounded assistant** | planned |
 
 ## Course II · Training and adaptation
 
 *Reason about, train and adapt a model, and be right about what it costs.*
-≈ 135 hrs.
+≈ 147 hrs.
 
 | Module | Status |
 |---|---|
@@ -35,6 +36,7 @@ real user.* ≈ 135 hrs.
 | 6 · Training dynamics and memory arithmetic | planned |
 | 7 · Adaptation — SFT, LoRA, QLoRA | planned |
 | 8 · Preference optimization and scaling laws | planned |
+| 17 · Generative vision as a cost model | planned |
 | **Capstone II · Train it, then adapt it** | planned |
 
 ## Course III · AI infrastructure
