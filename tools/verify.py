@@ -22,6 +22,7 @@ PY = sys.executable
 TOK_MINI = ROOT / "projects" / "tokenizer_mini"
 EXTRACTION = ROOT / "projects" / "extraction_harness"
 REL_MINI = ROOT / "projects" / "reliability_report"
+RETRIEVAL_EVAL = ROOT / "projects" / "retrieval_eval"
 
 GATES: list[tuple[str, list[str], Path]] = [
     ("01 ruff", [PY, "-m", "ruff", "check", "."], ROOT),
@@ -39,6 +40,9 @@ GATES: list[tuple[str, list[str], Path]] = [
     ("08 grader:extraction_harness",
      [PY, "-m", "grader", "--reference", "--seed", "1"], EXTRACTION),
     ("10 sweep:extraction_harness", [PY, "-m", "grader", "--sweep", "30"], EXTRACTION),
+    ("08 grader:retrieval_eval",
+     [PY, "-m", "grader", "--reference", "--seed", "1"], RETRIEVAL_EVAL),
+    ("10 sweep:retrieval_eval", [PY, "-m", "grader", "--sweep", "30"], RETRIEVAL_EVAL),
     ("11 determinism", [PY, "tools/gate_determinism.py"], ROOT),
     ("12-17 subject gates", [PY, "tools/gates.py"], ROOT),
     ("13 no network", [PY, "tools/no_network.py"], ROOT),

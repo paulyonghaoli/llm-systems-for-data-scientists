@@ -50,5 +50,9 @@ system, they are what closes a gap this large.
 7. [3.7 Groundedness and citation](07-groundedness.md) — **available**
 8. [3.8 Retrieval metrics, and which one decides your answer](08-retrieval-metrics.md) — **available**
 
-**Module 3's eight lessons are complete.** Its mini-project closes the module
-and is next.
+**Module 3 is complete** — eight lessons and a graded mini-project.
+
+- [Mini-project 3: the retrieval evaluation harness](project-retrieval-eval.md)
+  — build the harness this module needed and did not have until lesson 3.8,
+  on benchmarks where two systems have identical recall by construction and
+  one of them ranks better.

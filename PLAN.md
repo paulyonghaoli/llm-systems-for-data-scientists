@@ -4,23 +4,22 @@
 sessions treat this file as authoritative and amend it when scope changes.
 
 **Where things stand:** **P0 complete**; **P1 (Course I) under way.**
-**Modules 0, 1 and 2 are complete** — five lessons and a graded
-mini-project each. **Module 3 is under way.** The deepening backlog was cleared on
+**Modules 0, 1, 2 and 3 are complete**, each with a graded mini-project. The deepening backlog was cleared on
 2026-08-11 and **every lesson meets gate 21** — a median of 2,556 words against
 the 2,500 floor, mean sentence length 25.7 words, 11.8% short sentences, up
 from 1,574 / 20.3 / 20.5% before the pass.
 
-Twenty-two lessons, 46 exercises, 22 question banks (192 questions), 3 autograded
-mini-projects, 22 experiments, 8 generated figures, **29 gates** green and
-browser-verified. See §11–15 for the build logs.
+Twenty-three lessons, 48 exercises, 23 question banks (202 questions), **4
+autograded mini-projects**, 23 experiments, 8 generated figures, **29 gates**
+green and browser-verified. See §11–15 for the build logs.
 
-**Module 3 is at 3.7 of 8.** Its corpus (2,419 documents, 200 queries, all
+**Module 3 is COMPLETE** — eight lessons and a graded mini-project. Its corpus (2,419 documents, 200 queries, all
 seven planted phenomena verified rather than asserted by gate 25, that
 verification adversarially tested by gate 26), a pinned embedding fixture
 checked offline by gate 27, a pinned cross-encoder reranker fixture, and an
 authored cited-answer set for groundedness checking. See §15,
 `data/corpus/README.md`, and §10a amendment 2 for the claim this work
-withdrew. Next: lesson 3.8, then Module 4 and Capstone I.
+withdrew. Next: Module 4 (agents and tool use), then Capstone I.
 
 **Audience.** Data scientists who are fluent in Python, pandas, NumPy, sklearn,
 statistics, experiment design and offline evaluation — and who have never

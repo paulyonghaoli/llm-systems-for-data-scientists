@@ -103,3 +103,4 @@ nav:
       - "3.6 Reranking": modules/03-retrieval/06-reranking.md
       - "3.7 Groundedness and citation": modules/03-retrieval/07-groundedness.md
       - "3.8 Retrieval metrics": modules/03-retrieval/08-retrieval-metrics.md
+      - "Mini-project 3: the retrieval evaluation harness": modules/03-retrieval/project-retrieval-eval.md
