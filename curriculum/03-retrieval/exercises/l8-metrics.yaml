@@ -1,0 +1,143 @@
+id: ret-l8-metrics
+title: "Five metrics, and the divisor that flatters a system"
+lesson: modules/03-retrieval/08-retrieval-metrics
+description: |
+  Compute the five metrics for one query, given which results were correct.
+
+  `CASES` holds `(hits, n_gold)` pairs for five queries at `k = 5`, where
+  `hits[i]` is 1 when the i-th result is correct. Note the fourth case: three
+  documents were correct and the system found one of them, at position 2.
+
+  The starter divides average precision by the number of hits it *found*
+  rather than by the number that *existed*. That case then scores 0.5 — the
+  same as a query with one correct document found at position 2 — so a system
+  that missed two thirds of the answer is scored as though it retrieved
+  everything there was.
+
+  It is a quiet bug because it never fires on a single-answer benchmark, where
+  `found` and `n_gold` are both 1 whenever anything is found at all. It appears
+  only on the multi-answer queries, which are usually the minority, so the
+  average moves by a little and nothing looks wrong.
+
+  The divisor is `min(n_gold, k)`: a system cannot be expected to return four
+  correct documents in three slots, and it must be penalised for the ones it
+  missed within the slots it had.
+
+setup_code: |
+  import math
+
+  K = 5
+
+  # (hits, n_gold) for five queries. hits[i] == 1 means result i was correct.
+  CASES = [
+      ([0, 1, 0, 0, 0], 1),
+      ([1, 0, 0, 0, 0], 1),
+      ([0, 0, 1, 0, 1], 2),
+      ([0, 1, 0, 0, 0], 3),     # three correct documents existed; one was found
+      ([0, 0, 0, 0, 0], 1),
+  ]
+
+  def mean(values):
+      """Arithmetic mean, for averaging per-query scores over the benchmark."""
+      return sum(values) / len(values)
+
+starter_code: |
+  def score(hits, n_gold, k=K):
+      """(recall, precision, rr, ap, ndcg) for one query."""
+      recall = 1.0 if any(hits) else 0.0
+      precision = sum(hits) / k
+
+      rr = 0.0
+      for i, h in enumerate(hits, start=1):
+          if h:
+              rr = 1 / i
+              break
+
+      found, acc = 0, 0.0
+      for i, h in enumerate(hits, start=1):
+          if h:
+              found += 1
+              acc += found / i
+      # Bug: divides by the number of correct documents RETRIEVED rather than
+      # the number that existed, so missing two of three costs nothing.
+      ap = acc / found if found else 0.0
+
+      dcg = sum(h / math.log2(i + 1) for i, h in enumerate(hits, start=1))
+      idcg = sum(1 / math.log2(i + 1) for i in range(1, min(n_gold, k) + 1))
+      return recall, precision, rr, ap, dcg / idcg
+
+
+  for hits, n_gold in CASES:
+      r, p, rr, ap, nd = score(hits, n_gold)
+      print(f"{str(hits):<18} gold={n_gold}  rec={r:.2f} prec={p:.2f} "
+            f"rr={rr:.4f} ap={ap:.4f} ndcg={nd:.4f}")
+
+tests: |
+  # The case the bug is about: one of three correct documents, at position 2.
+  _, _, rr, ap, _ = score([0, 1, 0, 0, 0], 3)
+  assert abs(ap - 1 / 6) < 1e-9, (
+      f"average precision came out {ap:.4f}, expected 0.1667. One of three "
+      "correct documents was found, at position 2, giving precision 0.5 at "
+      "that hit and a divisor of min(3, 5) = 3. A divisor of `found` would "
+      "give 0.5 — full marks for retrieving a third of the answer."
+  )
+  assert abs(rr - 0.5) < 1e-9, "reciprocal rank is unaffected by n_gold"
+
+  # With a single gold document, average precision IS reciprocal rank.
+  for pos in (1, 2, 4):
+      hits = [1 if i == pos else 0 for i in range(1, K + 1)]
+      _, _, rr1, ap1, _ = score(hits, 1)
+      assert abs(ap1 - rr1) < 1e-9, (
+          f"at n_gold=1 average precision should equal reciprocal rank, got "
+          f"{ap1:.4f} against {rr1:.4f}"
+      )
+
+  # Every metric on the whole benchmark.
+  rows = [score(h, g) for h, g in CASES]
+  got = [round(mean([r[i] for r in rows]), 4) for i in range(5)]
+  assert got[0] == 0.8, f"mean recall should be 0.8, got {got[0]}"
+  assert got[1] == 0.2, f"mean precision should be 0.2, got {got[1]}"
+  assert got[2] == 0.4667, f"MRR should be 0.4667, got {got[2]}"
+  assert got[3] == 0.4067, (
+      f"MAP should be 0.4067, got {got[3]}. The buggy divisor gives 0.4733 — "
+      "a system scored six points better than it deserves, entirely from the "
+      "one multi-answer query."
+  )
+  assert got[4] == 0.4942, f"nDCG should be 0.4942, got {got[4]}"
+
+  # A query with nothing correct scores zero on everything.
+  assert score([0, 0, 0, 0, 0], 2) == (0.0, 0.0, 0.0, 0.0, 0.0)
+
+  # A perfect ordering scores 1 on the rank metrics.
+  _, _, rr2, ap2, nd2 = score([1, 1, 0, 0, 0], 2)
+  assert abs(rr2 - 1.0) < 1e-9 and abs(ap2 - 1.0) < 1e-9 and abs(nd2 - 1.0) < 1e-9, (
+      "both correct documents in the top two positions is the ideal ordering"
+  )
+
+hints:
+  - "`found` counts what the system retrieved. The metric should ask about what existed."
+  - "`ap = acc / min(n_gold, k)`"
+  - "Everything else in the function is already correct, including the nDCG normaliser."
+
+solution: |
+  def score(hits, n_gold, k=K):
+      """(recall, precision, rr, ap, ndcg) for one query."""
+      recall = 1.0 if any(hits) else 0.0
+      precision = sum(hits) / k
+
+      rr = 0.0
+      for i, h in enumerate(hits, start=1):
+          if h:
+              rr = 1 / i
+              break
+
+      found, acc = 0, 0.0
+      for i, h in enumerate(hits, start=1):
+          if h:
+              found += 1
+              acc += found / i
+      ap = acc / min(n_gold, k)
+
+      dcg = sum(h / math.log2(i + 1) for i, h in enumerate(hits, start=1))
+      idcg = sum(1 / math.log2(i + 1) for i in range(1, min(n_gold, k) + 1))
+      return recall, precision, rr, ap, dcg / idcg

@@ -48,5 +48,7 @@ system, they are what closes a gap this large.
 5. [3.5 Chunking, and the benefit this corpus cannot show](05-chunking.md) — **available**
 6. [3.6 Reranking, and the metric that hides it](06-reranking.md) — **available**
 7. [3.7 Groundedness and citation](07-groundedness.md) — **available**
+8. [3.8 Retrieval metrics, and which one decides your answer](08-retrieval-metrics.md) — **available**
 
-Lesson 3.8 (retrieval metrics) is in progress.
+**Module 3's eight lessons are complete.** Its mini-project closes the module
+and is next.

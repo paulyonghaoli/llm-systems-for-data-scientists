@@ -1,0 +1,113 @@
+id: ret-l8-ceiling
+title: "The precision that cannot reach 1"
+lesson: modules/03-retrieval/08-retrieval-metrics
+description: |
+  A retrieval system scores precision@10 of 0.0875 and someone concludes that
+  91% of what it returns is wrong. Work out whether that reading is available.
+
+  `GOLD_SIZES` holds the number of correct documents for each of eight
+  queries, and `PRECISION` holds the system's precision@10 on each. Six of the
+  eight queries have a single correct document, so nine of ten slots are
+  *necessarily* wrong on those queries however good the system is.
+
+  Write `ceiling`, returning the highest precision@k this benchmark permits,
+  and `pct_of_ceiling`, expressing an observed score against it. The starter
+  assumes the ceiling is 1.0, which is the assumption built into reading 0.0875
+  as a failure.
+
+  The answer is that the ceiling is 0.15 and the system is at 58.3% of it. That
+  is a mediocre result rather than a catastrophic one, and the two readings
+  differ by an order of magnitude in how alarming they sound.
+
+  This is the same omission as reporting a classifier's accuracy without the
+  class balance, and it is more common in retrieval because the bound is a
+  property of the labelling convention rather than of anything visible in the
+  metric's name.
+
+setup_code: |
+  K = 10
+
+  # Number of correct documents per query, and the system's precision@10.
+  GOLD_SIZES = [1, 1, 1, 2, 3, 1, 1, 2]
+  PRECISION = [0.1, 0.0, 0.1, 0.1, 0.2, 0.0, 0.1, 0.1]
+
+  def mean(values):
+      """Arithmetic mean."""
+      return sum(values) / len(values)
+
+starter_code: |
+  def ceiling(gold_sizes, k=K):
+      """The highest precision@k attainable given these gold set sizes."""
+      # Bug: assumes a perfect system could return k correct documents for
+      # every query. It cannot: a query with one correct document has nine
+      # wrong slots no matter what.
+      return 1.0
+
+
+  def pct_of_ceiling(observed, gold_sizes, k=K):
+      """An observed precision as a percentage of what is attainable."""
+      return 100.0 * observed / ceiling(gold_sizes, k)
+
+
+  observed = mean(PRECISION)
+  print(f"observed precision@{K} : {observed:.4f}")
+  print(f"ceiling               : {ceiling(GOLD_SIZES):.4f}")
+  print(f"percent of attainable : {pct_of_ceiling(observed, GOLD_SIZES):.1f}%")
+
+tests: |
+  c = ceiling(GOLD_SIZES)
+  assert abs(c - 0.15) < 1e-9, (
+      f"the ceiling came out {c}, expected 0.15. Per query it is "
+      "min(n_gold, k) / k — 0.1 for the six single-answer queries, 0.2 and 0.3 "
+      "for the others — averaged over the eight."
+  )
+
+  observed = mean(PRECISION)
+  assert abs(observed - 0.0875) < 1e-9, f"sanity: observed should be 0.0875, got {observed}"
+
+  pct = pct_of_ceiling(observed, GOLD_SIZES)
+  assert abs(pct - 58.333333) < 1e-4, (
+      f"the system is at {pct:.1f}% of the attainable maximum, expected 58.3%. "
+      "Read against a ceiling of 1.0 the same system looks like it is getting "
+      "91% of its results wrong."
+  )
+
+  # A benchmark where every query has k correct documents has no ceiling problem.
+  assert abs(ceiling([K] * 5) - 1.0) < 1e-9, (
+      "if every query has k or more correct documents, precision@k can reach 1"
+  )
+
+  # More gold documents than slots cannot raise the ceiling above 1.
+  assert abs(ceiling([50, 50]) - 1.0) < 1e-9, (
+      "min(n_gold, k) caps the per-query ceiling at 1 — a system cannot return "
+      "50 documents in 10 slots"
+  )
+
+  # A single-answer benchmark is capped at 1/k, which is the case worth knowing.
+  assert abs(ceiling([1] * 20) - 0.1) < 1e-9, (
+      "with one correct document per query, precision@10 cannot exceed 0.1 — "
+      "which is why the metric carries no information recall@10 does not"
+  )
+
+  # A perfect system must score 100% of the ceiling, not 100% of 1.0.
+  perfect = [min(g, K) / K for g in GOLD_SIZES]
+  assert abs(pct_of_ceiling(mean(perfect), GOLD_SIZES) - 100.0) < 1e-9, (
+      "a system retrieving every correct document should read as 100% of "
+      "attainable; if it does not, the ceiling and the observed score are not "
+      "being computed on the same basis"
+  )
+
+hints:
+  - "Per query the best possible precision@k is min(n_gold, k) / k."
+  - "`mean(min(g, k) / k for g in gold_sizes)` — but `mean` takes a sequence."
+  - "`pct_of_ceiling` is already correct once `ceiling` is."
+
+solution: |
+  def ceiling(gold_sizes, k=K):
+      """The highest precision@k attainable given these gold set sizes."""
+      return mean([min(g, k) / k for g in gold_sizes])
+
+
+  def pct_of_ceiling(observed, gold_sizes, k=K):
+      """An observed precision as a percentage of what is attainable."""
+      return 100.0 * observed / ceiling(gold_sizes, k)

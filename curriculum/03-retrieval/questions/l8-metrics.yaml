@@ -1,0 +1,266 @@
+id: ret-l8
+lesson: modules/03-retrieval/08-retrieval-metrics
+title: "3.8 - Retrieval metrics"
+questions:
+  - id: q1
+    type: single
+    difficulty: hard
+    prompt: >-
+      Lexical retrieval scores 0.705 recall@10 against dense retrieval's 0.614,
+      and 0.287 MRR against dense's 0.356. Which system is better?
+    options:
+      - text: "The question is underspecified — it depends what the results are used for, and here only one of the two differences is statistically supported."
+        correct: true
+        explanation: >-
+          Lexical's recall advantage is 43 queries won to 27 at p = 0.0722,
+          which is suggestive rather than significant; dense's MRR advantage has
+          a bootstrap interval excluding zero. So dense is demonstrably better
+          at ranking and lexical is not demonstrably better at finding — a
+          sharper conclusion than "it depends on your metric".
+      - text: "Lexical, since recall is the primary retrieval metric."
+        explanation: >-
+          There is no primary metric. Recall@10 was the convention in this
+          module because it was implemented first, which is exactly the
+          accident the lesson is about.
+      - text: "Dense, since it wins on three of the five metrics."
+        explanation: >-
+          Counting metrics treats them as votes, which they are not — they are
+          different questions, and some of them are nearly the same question
+          asked twice.
+      - text: "Neither, since a 176-query benchmark cannot distinguish systems."
+        explanation: >-
+          It distinguished the MRR difference well enough for an interval to
+          exclude zero. Some differences are resolvable at this size and some
+          are not, which is why intervals are reported.
+
+  - id: q2
+    type: single
+    difficulty: medium
+    prompt: >-
+      A system scores precision@10 of 0.076 on a benchmark where 145 of 176
+      queries have exactly one correct document. What can you conclude?
+    options:
+      - text: "Very little without the ceiling — precision@10 is capped at 0.118 here, so 0.076 is 64% of the attainable maximum."
+        correct: true
+        explanation: >-
+          With one correct document and ten slots, nine are necessarily wrong.
+          The metric's bound is a property of the labelling convention rather
+          than of the system, and it is invisible in the metric's name.
+      - text: "The system returns mostly irrelevant results and needs work."
+        explanation: >-
+          This is the reading the missing ceiling invites. A perfect system
+          scores 0.118 on this benchmark.
+      - text: "Precision@10 should be replaced with precision@1."
+        explanation: >-
+          That would raise the ceiling to 1.0 and change the question to one
+          about ranking, which MRR already answers more informatively.
+      - text: "The gold labels are incomplete, since real queries have more than one answer."
+        explanation: >-
+          Possibly true of some corpora and not something this number shows.
+          The ceiling follows from the labels whatever their quality.
+
+  - id: q3
+    type: multi
+    difficulty: medium
+    prompt: >-
+      Which statements about MAP and MRR are true on a benchmark where most
+      queries have exactly one correct document?
+    options:
+      - text: "They are the same quantity for those queries."
+        correct: true
+        explanation: >-
+          With one gold document, average precision reduces exactly to
+          reciprocal rank, since there is a single hit and the divisor is 1.
+      - text: "Reporting both suggests two independent pieces of evidence where there is one."
+        correct: true
+        explanation: >-
+          Which is why the two columns track each other closely throughout §G's
+          table. It is not a coincidence to be noted, it is an identity.
+      - text: "MAP becomes informative as the number of correct documents per query grows."
+        correct: true
+        explanation: >-
+          It rewards getting *all* the correct documents high rather than just
+          the first, which is a distinction only multi-answer queries can make.
+      - text: "MRR is undefined when a query has several correct documents."
+        explanation: >-
+          It is well defined — it simply uses the first hit and ignores the
+          rest, which is the property that makes it differ from MAP.
+      - text: "Both are set metrics, so reranking does not affect them."
+        explanation: >-
+          Both are rank metrics, and reranking moved MRR from 0.287 to 0.459 on
+          the lexical run.
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      Why does the comparison of MRR between two systems need a bootstrap
+      rather than the exact McNemar test used elsewhere in this module?
+    options:
+      - text: "MRR is continuous per query, and McNemar requires binary outcomes, so applying it would mean thresholding away the positional information."
+        correct: true
+        explanation: >-
+          Recall is one bit per query, which is what makes McNemar exact and
+          appropriate. Reciprocal rank takes values like 1, 0.5 and 0.25, and a
+          bootstrap over paired per-query differences uses all of it.
+      - text: "Because MRR differences are always small."
+        explanation: >-
+          Size is not what selects the test; the measurement scale is.
+      - text: "Because the bootstrap is more powerful than McNemar."
+        explanation: >-
+          Neither dominates. They apply to different kinds of measurement, and
+          McNemar is exact on the data it suits.
+      - text: "Because MRR is not normally distributed."
+        explanation: >-
+          True, and the reason a t-test is questionable rather than the reason
+          McNemar does not apply. McNemar's problem is that it needs bits.
+
+  - id: q5
+    type: single
+    difficulty: medium
+    prompt: >-
+      Your product shows the user a single answer drawn from the top retrieved
+      document. Which metric should gate changes?
+    options:
+      - text: "Something at rank 1 — MRR, or recall@1, because a correct document at rank 8 is worth nothing to this product."
+        correct: true
+        explanation: >-
+          The metric should encode what the product does with the results. This
+          is also the case where reranking pays most: lesson 3.6 measured
+          recall@1 going from 0.051 to 0.250 while recall@10 barely moved.
+      - text: "recall@10, so results are comparable with published benchmarks."
+        explanation: >-
+          Comparability is worth something and is not worth gating on a
+          quantity no user experiences. Report it alongside if you need it.
+      - text: "nDCG@10, since it is the most sophisticated metric available."
+        explanation: >-
+          Sophistication is not the criterion. nDCG@10 credits improvements at
+          positions this product never shows.
+      - text: "precision@10, since it measures the quality of the whole result set."
+        explanation: >-
+          The product does not use the whole result set, and on a
+          single-answer benchmark precision@10 is capped near 0.1 besides.
+
+  - id: q6
+    type: numeric
+    difficulty: medium
+    prompt: >-
+      A query has 3 correct documents. The system returns 10 results and the
+      only correct one is at position 2. What is its average precision, to
+      three decimal places?
+    answer: 0.167
+    tolerance: 0.004
+    explanation: >-
+      Precision at the single hit is 1/2, and the divisor is min(3, 10) = 3, so
+      AP = 0.5 / 3 = 0.167. Dividing by the number of hits *found* instead
+      would give 0.5 — full marks for retrieving a third of the answer — which
+      is the bug in the tier-3 exercise and one that never fires on a
+      single-answer benchmark.
+
+  - id: q7
+    type: single
+    difficulty: hard
+    prompt: >-
+      Across the five systems in §G, two different systems take first place
+      under the five metrics and the mean rank correlation between metrics is
+      0.600. What follows for how you run an evaluation?
+    options:
+      - text: "Choose the metric in advance from what the product does, because a metric picked after seeing results can justify almost any system."
+        correct: true
+        explanation: >-
+          Every system in the table wins under some metric. Choosing afterwards
+          removes the constraint the measurement was supposed to impose, and it
+          requires no bad faith — only the freedom to decide later.
+      - text: "Report the average of the five metrics as an overall score."
+        explanation: >-
+          Averaging quantities that measure different things, on different
+          scales with different ceilings, produces a number with no
+          interpretation.
+      - text: "Use only nDCG, since it is the most general."
+        explanation: >-
+          Defensible as a default and still a choice that should follow from
+          the product. nDCG credits positions your interface may never show.
+      - text: "Increase the number of queries until the metrics agree."
+        explanation: >-
+          They disagree because they measure different things, not because of
+          sampling noise. More queries sharpen each metric and will not
+          reconcile them.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why should an evaluation harness return per-query scores rather than an
+      average?
+    options:
+      - text: "Paired tests, confidence intervals and per-query-type breakdowns all need them, and none can be recovered from a mean."
+        correct: true
+        explanation: >-
+          Averaging is one line the caller can do; the reverse is impossible.
+          The per-query-type breakdown is how lesson 3.3 found that stopword
+          removal helped multi-hop queries and hurt near-duplicates.
+      - text: "Because averages are biased estimators of retrieval quality."
+        explanation: >-
+          The mean is unbiased for what it estimates. The problem is that it
+          discards everything else.
+      - text: "To allow the metric to be recomputed at a different cutoff."
+        explanation: >-
+          That needs the ranked results, not the per-query scores — a stronger
+          requirement and a good idea for the same reason.
+      - text: "Because per-query scores are needed to compute nDCG."
+        explanation: >-
+          nDCG is computed per query and then averaged, so the per-query values
+          exist either way; the question is whether they are kept.
+
+  - id: q9
+    type: single
+    difficulty: hard
+    prompt: >-
+      Module 3 reported recall@10 throughout, and on that metric lexical
+      retrieval leads dense by nine points. What does adding rank-aware metrics
+      and intervals change?
+    options:
+      - text: "It reverses the comparison and shows the reversal is the better-supported half, so a single-metric harness would have shipped a defensible and wrong recommendation."
+        correct: true
+        explanation: >-
+          The first metric someone implements tends to become the standard, so
+          this is not a hypothetical risk. The lexical recall advantage does not
+          reach significance; the dense ranking advantage does.
+      - text: "Nothing — the additional metrics confirm the original ordering."
+        explanation: >-
+          They invert it. Dense wins MRR, MAP and nDCG.
+      - text: "It shows recall@10 was computed incorrectly."
+        explanation: >-
+          Every number was correct. The problem is which question was asked,
+          not whether it was answered accurately.
+      - text: "It shows the benchmark is too small to support any conclusion."
+        explanation: >-
+          One of the two conclusions is supported at this size. Reporting
+          intervals is what distinguishes them.
+
+  - id: q10
+    type: single
+    difficulty: medium
+    prompt: >-
+      Which of these is a property of the *benchmark* rather than of the system
+      being evaluated?
+    options:
+      - text: "The maximum attainable precision@k, which is set by how many correct documents each query has."
+        correct: true
+        explanation: >-
+          Two benchmarks with identical systems and different labelling
+          conventions produce different precision numbers. It is the same
+          omission as reporting a classifier's accuracy without the class
+          balance.
+      - text: "The mean reciprocal rank achieved."
+        explanation: >-
+          That is a property of the system's ordering, which is what the metric
+          is there to measure.
+      - text: "Whether reranking improves the results."
+        explanation: >-
+          A property of the interaction between the first stage and the
+          reranker, which lesson 3.6 measured differing sharply between runs.
+      - text: "The rank correlation between metrics."
+        explanation: >-
+          A property of the systems being compared: metrics agree more when the
+          systems differ in ways all of them can see.
