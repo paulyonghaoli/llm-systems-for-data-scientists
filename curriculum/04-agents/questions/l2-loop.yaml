@@ -1,0 +1,320 @@
+id: agt-l2
+lesson: modules/04-agents/02-loop-and-termination
+title: "4.2 - The loop, and when to stop it"
+questions:
+  - id: q1
+    type: single
+    difficulty: medium
+    prompt: >-
+      `repeat_stop` saves 51.5% of the baseline's tokens — the biggest saving of
+      any single rule measured — and the lesson calls it the worst rule in the
+      table. Why?
+    options:
+      - text: >-
+          It cut 5 of the 16 episodes that would have succeeded, and the token
+          column cannot show that.
+        correct: true
+        explanation: >-
+          A stopping rule is a classifier with two error types. Reading only the
+          savings is evaluating it on one of them, and the rule that saves most
+          is often the one cutting hardest into the successes.
+      - text: "Because 51.5% is a smaller saving than the composite's 53.5%."
+        correct: false
+        explanation: >-
+          A 2-point difference in savings would be a reason to prefer the
+          composite, not to call `repeat_stop` bad. The lost successes are.
+      - text: "Because it is the most expensive rule to implement."
+        correct: false
+        explanation: >-
+          It is the cheapest — a set membership test on calls already recorded.
+          Cheapness is part of why it gets shipped.
+      - text: "Because it stops episodes before the budget has been consumed."
+        correct: false
+        explanation: >-
+          Stopping early is the goal. Stopping the *right* episodes early is
+          the difficulty.
+
+  - id: q2
+    type: single
+    difficulty: hard
+    prompt: >-
+      `no_progress` fires on three identical results in a row. An agent
+      alternates between two calls for the full episode. What does the detector
+      do?
+    options:
+      - text: >-
+          Nothing at all — two calls alternating produce two results
+          alternating, so there are never three identical in a row.
+        correct: true
+        explanation: >-
+          The behaviour runs the full 12 steps under it. Any cycle longer than
+          one defeats a rule written against repetition, which is why the
+          lesson redefines progress as novelty over a window.
+      - text: "It fires on step 3, since the third result repeats the first."
+        correct: false
+        explanation: >-
+          The rule reads the last three results and asks whether they are
+          identical. In an A-B-A window they are not.
+      - text: "It fires as soon as the second cycle begins, on step 4."
+        correct: false
+        explanation: >-
+          That is what a *novelty* rule does, and it is the change the lesson
+          argues for. The identical-results rule never fires here.
+      - text: "It fires, but only because the budget stops the episode first."
+        correct: false
+        explanation: >-
+          The budget is a separate rule. Under `no_progress` alone this
+          behaviour reaches the step limit.
+
+  - id: q3
+    type: single
+    difficulty: hard
+    prompt: >-
+      Adding a cache — serving a repeated call from a previous result instead of
+      executing it — dropped the composite rule's saving from 50.2% to 26.3%.
+      What went wrong?
+    options:
+      - text: >-
+          The cached step recorded no observation, so the novelty detector never
+          saw the steps that would have triggered it.
+        correct: true
+        explanation: >-
+          The `continue` skipped the detector entirely. Counting a cache hit as
+          a step that learned nothing — which by definition it is — restores the
+          saving to 53.5%.
+      - text: "The cache lookup itself cost more than executing the tool."
+        correct: false
+        explanation: >-
+          Cache lookups are free at this scale. The cost is in the extra steps
+          the agent got to take.
+      - text: "Cached results are stale, so the agent had to re-run its work."
+        correct: false
+        explanation: >-
+          The sandbox is deterministic, so a cached result is exactly what
+          re-executing would have returned. Staleness is not the mechanism.
+      - text: "The cache made each step cheaper, which is why the total fell less."
+        correct: false
+        explanation: >-
+          Half right and worth being precise about: cheaper steps are good, but
+          the agent took *more* of them, and the net was worse. A cached step
+          still costs a model call.
+
+  - id: q4
+    type: single
+    difficulty: medium
+    prompt: >-
+      `runaway` proposes a different, plausible, useless call every step.
+      Which rules can see it?
+    options:
+      - text: >-
+          The budget, the step limit, and a novelty detector — but not a
+          repeated-call check, since every call really is new.
+        correct: true
+        explanation: >-
+          Novelty catches it because the *results* repeat even though the calls
+          do not, which is the general argument for defining these rules over
+          results rather than over calls.
+      - text: "All of them, since twelve useless calls is an obvious pathology."
+        correct: false
+        explanation: >-
+          Obvious to a reader, invisible to a call-level check. `repeat_stop`
+          runs this behaviour to the full step limit.
+      - text: "Only the step limit, since nothing else has evidence to fire on."
+        correct: false
+        explanation: >-
+          The budget bounds it too, and novelty stops it at 4 steps because the
+          results stop being new after the first.
+      - text: "Only a repeated-call check, since the queries are near-duplicates."
+        correct: false
+        explanation: >-
+          Near-duplicate is not duplicate. A check on exact call identity sees
+          twelve distinct calls.
+
+  - id: q5
+    type: single
+    difficulty: hard
+    prompt: >-
+      A novelty detector with patience k cuts a solvable episode when a flaky
+      tool fails how many times in a row?
+    options:
+      - text: "k + 1, because the first failure is the first time that result has been seen."
+        correct: true
+        explanation: >-
+          It counts as novel, so the run of uninformative steps only starts
+          afterwards. The cost is f**(k+1), and the sweep and the closed form
+          disagreeing by a factor of two is what found this.
+      - text: "k, by the definition of the window."
+        correct: false
+        explanation: >-
+          The natural reading, and the one the lesson's author shipped first.
+          The window counts *uninformative* steps, and the first failure is not
+          one of them.
+      - text: "k - 1, since the detector fires on the step that completes the window."
+        correct: false
+        explanation: >-
+          Firing on the completing step is right; the window still needs k
+          uninformative steps, preceded by the informative first failure.
+      - text: "It depends on the failure rate, not on k."
+        correct: false
+        explanation: >-
+          The failure rate sets how *often* a run that long happens. How long a
+          run has to be is set by k alone.
+
+  - id: q6
+    type: single
+    difficulty: medium
+    prompt: >-
+      A tool fails independently 40% of the time and you will tolerate cutting
+      1% of solvable episodes. What patience does that buy?
+    options:
+      - text: "k = 5, since k = 4 lands at 1.02% — just over the line."
+        correct: true
+        explanation: >-
+          Solve f**(k+1) <= tolerance. It is one line of arithmetic, and it
+          replaces a hyperparameter with a computed quantity.
+      - text: "k = 3, which is the value the lesson's experiment uses."
+        correct: false
+        explanation: >-
+          k = 3 costs 2.56%, which is more than the stated tolerance. The
+          experiment's k is not a recommendation.
+      - text: "k = 12, matching the step limit."
+        correct: false
+        explanation: >-
+          That would meet the tolerance with enormous room to spare, at the
+          cost of letting every doomed episode run nearly to the limit.
+      - text: "It cannot be computed without measuring the agent's behaviour."
+        correct: false
+        explanation: >-
+          The false-cut rate depends only on the tool's failure rate and k. The
+          agent's behaviour determines what you save, not what you lose.
+
+  - id: q7
+    type: multi
+    difficulty: medium
+    prompt: >-
+      The step limit never binds once a budget and a novelty detector are in
+      place. Which are good reasons to keep it? (Select all that apply.)
+    options:
+      - text: >-
+          It is the only rule that guarantees termination, because it fires on
+          the absence of evidence rather than on evidence.
+        correct: true
+        explanation: >-
+          Every other rule is a prediction and so has some input on which it
+          never fires. The step limit is a fact.
+      - text: >-
+          It bounds the case you did not think of, which is precisely the case
+          the other rules were not written against.
+        correct: true
+        explanation: >-
+          Each of the three rules in the lesson has a structural blind spot,
+          and each was found only by running a behaviour written to expose it.
+      - text: >-
+          It is the unit the bill is denominated in, so it bounds spend
+          directly.
+        correct: false
+        explanation: >-
+          That is the budget's job. Steps vary in cost by an order of magnitude
+          depending on how much a tool returns, which is why a step limit is a
+          poor proxy for spend.
+      - text: >-
+          It stops the episodes the budget would otherwise cut too early.
+        correct: false
+        explanation: >-
+          Rules compose by stopping *sooner*, never later. A step limit cannot
+          rescue an episode from another rule.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      Why does the lesson report no p-values, despite comparing seven rules
+      across thirty episodes?
+    options:
+      - text: >-
+          The behaviours are authored, so a significance test would be
+          measuring the author rather than anything about agents.
+        correct: true
+        explanation: >-
+          A significance test asks whether a result would replicate on new
+          samples from the same population. Here that population is one
+          person's authorship, so the question has no useful answer.
+      - text: "Thirty episodes is too few for any test to reach significance."
+        correct: false
+        explanation: >-
+          Thirty paired episodes is enough for McNemar to detect a large
+          effect. The objection is about what the population is, not its size.
+      - text: "Because the outcomes are token counts rather than binary."
+        correct: false
+        explanation: >-
+          Solved/not-solved is binary and paired, so a test is available. The
+          reason not to run it is different.
+      - text: "Because the sandbox is deterministic, so every result has zero variance."
+        correct: false
+        explanation: >-
+          True of the first table and a good observation, but the second table
+          uses independent draws and still reports no p-value, for the reason
+          above.
+
+  - id: q9
+    type: single
+    difficulty: easy
+    prompt: >-
+      An agent harness reports "68% task success". What does `stopped_by` add
+      that this number cannot carry?
+    options:
+      - text: >-
+          Whether the other 32% were wrong answers or episodes the harness cut
+          off, which are different problems with different fixes.
+        correct: true
+        explanation: >-
+          Budget cuts point at the stopping rules; wrong answers point at the
+          agent. One string per episode separates them, and without it the
+          success rate alone cannot.
+      - text: "The average cost of a successful episode."
+        correct: false
+        explanation: >-
+          That comes from the token counts, which most harnesses already
+          record.
+      - text: "Which tool was responsible for each failure."
+        correct: false
+        explanation: >-
+          The trajectory carries that. `stopped_by` answers a coarser and more
+          immediately useful question.
+      - text: "Whether the model or the harness proposed each call."
+        correct: false
+        explanation: >-
+          The harness never proposes calls; that boundary is lesson 4.1's
+          subject and is not in question here.
+
+  - id: q10
+    type: single
+    difficulty: hard
+    prompt: >-
+      Every number in the lesson's first table comes from a sandbox where the
+      same lookup fails identically forever. How does that bias the comparison?
+    options:
+      - text: >-
+          It flatters every detector, because a retry can never pay, so
+          stopping a retrying agent is always correct there.
+        correct: true
+        explanation: >-
+          The second table is the correction: with an independent draw per
+          attempt, patience becomes rational and the detectors acquire a
+          false-positive rate they did not have.
+      - text: "It biases against the detectors, since deterministic failures are rarer."
+        correct: false
+        explanation: >-
+          The direction is the other way. Determinism removes exactly the case
+          where continuing would have been right.
+      - text: "It has no effect, since the same sandbox is used for every rule."
+        correct: false
+        explanation: >-
+          Using it consistently makes the comparison internally fair and still
+          leaves it systematically generous to one class of rule. A shared bias
+          is still a bias.
+      - text: "It inflates the token counts, since failing calls return longer results."
+        correct: false
+        explanation: >-
+          Result length is the same either way. What changes is whether the
+          next attempt could have succeeded.

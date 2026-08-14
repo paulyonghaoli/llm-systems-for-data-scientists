@@ -107,3 +107,4 @@ nav:
   - "Module 4 · Agents & tool use":
       - Overview: modules/04-agents/index.md
       - "4.1 The tool-calling protocol": modules/04-agents/01-tool-calling-protocol.md
+      - "4.2 The loop and termination": modules/04-agents/02-loop-and-termination.md

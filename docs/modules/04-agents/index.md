@@ -43,7 +43,7 @@ part that will still be true when the format is not.
 ## Lessons
 
 1. [4.1 The tool-calling protocol](01-tool-calling-protocol.md) — **available**
-2. 4.2 The loop, its termination conditions and its budget — *planned*
+2. [4.2 The loop, and when to stop it](02-loop-and-termination.md) — **available**
 3. 4.3 Planning and decomposition — *planned*
 4. 4.4 Agent memory: working, episodic, semantic, and compaction — *planned*
 5. 4.5 MCP as a protocol — *planned*

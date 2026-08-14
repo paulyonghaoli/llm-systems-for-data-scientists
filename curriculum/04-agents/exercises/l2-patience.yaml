@@ -1,0 +1,130 @@
+id: agt-l2-patience
+title: "Patience is arithmetic, not taste"
+lesson: modules/04-agents/02-loop-and-termination
+description: |
+  A novelty detector with patience `k` cuts an episode a retry would have
+  solved whenever the flaky tool fails often enough in a row to fill the
+  window. That makes `k` a quantity you compute from the tool's failure rate,
+  rather than one you tune by watching traces — and watching traces is
+  systematically biased anyway, because the traces you notice are the
+  pathological ones while the episodes `k` costs you are the ones that quietly
+  failed.
+
+  Write `cut_probability(f, k)`, the fraction of solvable episodes patience `k`
+  cuts against a tool failing independently at rate `f`, and `patience_for(f,
+  tolerance)`, the smallest patience whose cost is within a tolerance.
+
+  The starter has the exponent this lesson's author got wrong on the first
+  attempt: `f ** k`. It is `f ** (k + 1)`, because the *first* failure is the
+  first time that result has been seen and so counts as informative — the run
+  of uninformative steps only starts afterwards. The measured sweep is what
+  found the error, and the last test here is that same cross-check.
+
+setup_code: |
+  #: The sandbox's flaky tool fails at this rate.
+  FAILURE_RATE = 0.4
+
+  #: Measured over 4,000 episodes with an independent draw per attempt: the
+  #: fraction of solvable episodes a novelty detector with k=3 cut. Sampling
+  #: noise on 4,000 draws is a few tenths of a point.
+  MEASURED_CUT_PCT_K3 = 2.7
+
+starter_code: |
+  def cut_probability(f, k):
+      """Fraction of solvable episodes patience k cuts, for failure rate f."""
+      # Off by one: this is the probability of k consecutive failures, but the
+      # first failure is informative -- it is the first time that result has
+      # been seen -- so the window needs one more than that.
+      return f ** k
+
+
+  def patience_for(f, tolerance, k_max=20):
+      """The smallest patience whose cut rate is within tolerance."""
+      for k in range(1, k_max + 1):
+          if cut_probability(f, k) <= tolerance:
+              return k
+      return k_max
+
+
+  for k in range(1, 6):
+      print(f"k={k}  cuts {100 * cut_probability(FAILURE_RATE, k):.2f}% of solvable episodes")
+  print(f"1% tolerance at f={FAILURE_RATE} -> k={patience_for(FAILURE_RATE, 0.01)}")
+
+tests: |
+  p3 = cut_probability(0.4, 3)
+  assert abs(p3 - 0.0256) < 1e-9, (
+      f"cut_probability(0.4, 3) came out {p3:.4f}, expected 0.0256. Patience of "
+      "3 needs FOUR consecutive failures to fire, not three: the first failure "
+      "is the first time that result has been seen, so it counts as "
+      "informative and the window of uninformative steps starts after it."
+  )
+
+  assert abs(cut_probability(0.4, 1) - 0.16) < 1e-9, (
+      "with patience 1, two consecutive failures are enough to cut"
+  )
+  assert abs(cut_probability(0.4, 5) - 0.004096) < 1e-9, "f ** (k + 1), for every k"
+
+  # A tool that never fails costs nothing, at any patience.
+  assert cut_probability(0.0, 3) == 0.0, "a tool that never fails cuts nothing"
+
+  # More patience is never more expensive.
+  costs = [cut_probability(0.4, k) for k in range(1, 8)]
+  assert costs == sorted(costs, reverse=True), (
+      f"the cost of patience should fall monotonically as k rises, got {costs}"
+  )
+
+  assert patience_for(0.4, 0.01) == 5, (
+      f"a 40% failure rate and a 1% tolerance needs k=5, got "
+      f"{patience_for(0.4, 0.01)}. k=4 lands at 1.02%, which is over the line."
+  )
+  assert patience_for(0.4, 0.02) == 4, "relaxing the tolerance to 2% buys back a step"
+  assert patience_for(0.1, 0.01) == 2, (
+      "a tool that fails a tenth of the time needs far less patience for the "
+      "same tolerance -- which is the point of computing k per tool rather "
+      "than picking one number for the whole system"
+  )
+  assert patience_for(0.05, 0.01) == 1, "a reliable tool needs no patience at all"
+
+  # patience_for must actually satisfy its own tolerance, for any f.
+  for f in (0.05, 0.1, 0.25, 0.4, 0.5, 0.7):
+      for tol in (0.05, 0.01, 0.001):
+          k = patience_for(f, tol)
+          assert cut_probability(f, k) <= tol, (
+              f"patience_for({f}, {tol}) returned {k}, whose cut rate is "
+              f"{cut_probability(f, k):.5f} -- above the tolerance it was asked for"
+          )
+          if k > 1:
+              assert cut_probability(f, k - 1) > tol, (
+                  f"patience_for({f}, {tol}) returned {k}, but {k - 1} already "
+                  "meets the tolerance; it should return the smallest one"
+              )
+
+  # The cross-check that found the off-by-one: the closed form has to agree
+  # with what the loop actually did.
+  predicted = 100 * cut_probability(FAILURE_RATE, 3)
+  assert abs(predicted - MEASURED_CUT_PCT_K3) < 1.0, (
+      f"the formula predicts {predicted:.2f}% where 4,000 measured episodes "
+      f"gave {MEASURED_CUT_PCT_K3}%. A derivation and a measurement that "
+      "disagree by more than sampling noise mean one of them is wrong, and it "
+      "is usually the derivation -- that is exactly how f ** k was caught."
+  )
+
+hints:
+  - "Count the failures the rule needs, not the size of the window: it is k + 1."
+  - "`patience_for` is already correct once `cut_probability` is."
+  - >-
+    The monotonicity test passes for free with the right formula; if it fails,
+    the exponent is not increasing with k.
+
+solution: |
+  def cut_probability(f, k):
+      """Fraction of solvable episodes patience k cuts, for failure rate f."""
+      return f ** (k + 1)
+
+
+  def patience_for(f, tolerance, k_max=20):
+      """The smallest patience whose cut rate is within tolerance."""
+      for k in range(1, k_max + 1):
+          if cut_probability(f, k) <= tolerance:
+              return k
+      return k_max

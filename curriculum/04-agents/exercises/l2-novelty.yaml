@@ -1,0 +1,153 @@
+id: agt-l2-novelty
+title: "The two-cycle a no-progress detector cannot see"
+lesson: modules/04-agents/02-loop-and-termination
+description: |
+  `stop_step(results, k)` decides when an agent has stopped learning anything.
+  It takes the results the episode has seen so far, in order, and returns the
+  1-based step at which the rule fires — or `None` if it never does.
+
+  The starter implements the definition that reads most naturally: **K
+  identical results in a row.** It works on an agent stuck repeating one call,
+  and it is blind to an agent alternating between two, because two calls
+  alternating produce two results alternating and there are never three
+  identical in a row. Measured in the lesson, that blindness costs 12 steps
+  against 5.
+
+  Reimplement it as **novelty**: fire when the last `k` steps produced no
+  result the episode had not already seen.
+
+  Two consequences to keep straight, because both are tested:
+
+  - the novelty rule is *later* than the naive one on a flat repeat — step 4
+    rather than step 3 — because the first failure is the first time that
+    result has been seen, so it counts as informative;
+  - a step that fails in a *new* way is a step that learned something, so a
+    run of four distinct timeouts must not fire the rule.
+
+setup_code: |
+  #: Result traces from real-shaped episodes, each a list of digests in the
+  #: order the episode saw them.
+  TRACES = {
+      # An agent retrying one call against a tool that always fails.
+      "flat_repeat":  ["timeout", "timeout", "timeout", "timeout", "timeout"],
+      # Two calls alternating forever -- the case the naive rule cannot see.
+      "two_cycle":    ["hold-doc", "policy-file", "hold-doc", "policy-file",
+                       "hold-doc", "policy-file"],
+      # Steady progress: something new every step.
+      "steady":       ["hold-doc", "claims-doc", "readme", "depot", "status"],
+      # Repeats itself once, then does the right thing. Must not be cut.
+      "one_repeat":   ["hold-doc", "hold-doc", "depot"],
+      # Fails four times, differently each time. Also learning.
+      "new_failures": ["timeout A", "timeout B", "timeout C", "timeout D"],
+      # Settles into a cycle after three productive steps.
+      "late_cycle":   ["a", "b", "c", "b", "c", "b", "c"],
+  }
+
+  K = 3
+
+starter_code: |
+  def stop_step(results, k=K):
+      """The 1-based step at which the rule fires, or None.
+
+      Fires on k identical results in a row.
+      """
+      for i in range(1, len(results) + 1):
+          window = results[:i]
+          if len(window) >= k and len(set(window[-k:])) == 1:
+              return i
+      return None
+
+
+  for name, trace in TRACES.items():
+      print(f"{name:<14} {len(trace)} steps -> stops at {stop_step(trace)}")
+
+tests: |
+  assert stop_step(TRACES["steady"]) is None, (
+      "an episode that produces something new every step is making progress "
+      "by any definition, and must never be cut"
+  )
+
+  cyc = stop_step(TRACES["two_cycle"])
+  assert cyc == 5, (
+      f"two_cycle stopped at {cyc}, expected step 5. Two calls alternating "
+      "produce two results alternating, so there are never three identical in "
+      "a row and a rule written against repetition never fires -- in the "
+      "lesson this behaviour runs the full 12 steps. Fire when the last k "
+      "steps produced nothing the episode had not already seen."
+  )
+
+  late = stop_step(TRACES["late_cycle"])
+  assert late == 6, (
+      f"late_cycle stopped at {late}, expected step 6. Three productive steps "
+      "come first, so the window of k uninformative steps only closes at 6."
+  )
+
+  flat = stop_step(TRACES["flat_repeat"])
+  assert flat == 4, (
+      f"flat_repeat stopped at {flat}, expected step 4 -- not 3. The first "
+      "failure is the first time that result has been seen, so it counts as "
+      "informative and the run of k uninformative steps starts after it. This "
+      "off-by-one is the difference between f**k and f**(k+1) in the lesson's "
+      "arithmetic, so it is worth getting exactly right."
+  )
+
+  assert stop_step(TRACES["one_repeat"]) is None, (
+      "one_repeat repeats itself once and then does the right thing; cutting "
+      "it is the false positive that makes a repeated-call check the worst "
+      "rule in the lesson's table"
+  )
+
+  assert stop_step(TRACES["new_failures"]) is None, (
+      "four distinct failures are four observations. An agent failing in a new "
+      "way each time is learning something, even though none of it looks like "
+      "progress -- which is why the rule reads novelty rather than success"
+  )
+
+  # Not a lookup table: a cycle of length three, never shown above.
+  three = stop_step(["a", "b", "c"] * 3)
+  assert three == 6, (
+      f"a three-cycle stopped at {three}, expected 6. Any cycle at all should "
+      "fire the rule once its period has been seen through twice; matching the "
+      "traces in TRACES is not an implementation."
+  )
+
+  # k is a parameter, not a constant baked into the loop.
+  assert stop_step(TRACES["two_cycle"], k=2) == 4, (
+      "with k=2 the two-cycle should fire at step 4; if this is unchanged, k "
+      "is being ignored somewhere"
+  )
+  assert stop_step(["t"] * 4, k=1) == 2, (
+      "with k=1 a single uninformative step is enough, so a flat repeat fires "
+      "at step 2"
+  )
+  assert stop_step(["a", "b", "c"], k=1) is None, (
+      "k=1 must still not fire on an episode where every step is new"
+  )
+
+  # And it cannot fire before it has k steps to look at.
+  for n in range(1, K):
+      assert stop_step(["timeout"] * n) is None, (
+          f"fired after {n} step(s) with k={K}; the window is not full yet"
+      )
+
+hints:
+  - "Walk the results once, recording for each whether it had been seen before."
+  - "`novel.append(r not in seen)` then `seen.add(r)` — in that order."
+  - >-
+    The rule fires at the first step where you have at least k flags and none of
+    the last k is True. `not any(novel[-k:])` says exactly that.
+
+solution: |
+  def stop_step(results, k=K):
+      """The 1-based step at which the rule fires, or None.
+
+      Fires when the last k steps produced no result not already seen.
+      """
+      novel = []
+      seen = set()
+      for step, result in enumerate(results, start=1):
+          novel.append(result not in seen)
+          seen.add(result)
+          if len(novel) >= k and not any(novel[-k:]):
+              return step
+      return None
