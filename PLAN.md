@@ -43,10 +43,11 @@ already calibrates on, plus a second unit that is more useful in practice:
 |---|---|---|
 | 1 graduate credit | ≈ 45 hrs total learner work | — |
 | 3-credit course | ≈ 135 hrs (reading + practice + project) | 1 course = 3–5 modules + 1 capstone |
-| 12 credits | ≈ 540 hrs learner work | 4 courses, 16 modules, ~87 lessons, 4 capstones |
-| Major textbook | 600–900 pages | ~87 lessons × 2,500–4,000 words ≈ 800 page-equivalents |
+| 13 credits | ≈ 582 hrs learner work | 4 courses, 18 modules, ~100 lessons, 4 capstones |
+| Major textbook | 600–900 pages | ~100 lessons × 2,500–4,000 words ≈ 920 page-equivalents |
 
-**Second unit.** Course I alone (~135 hrs, ~10 weeks at 12 hrs/week) is
+**Second unit.** Course I alone (~165 hrs after the 2026-08-13 amendment, ~14
+weeks at 12 hrs/week) is
 calibrated to "you can now build, evaluate and cost a retrieval or agent feature
 that survives contact with a real user." That is the claim Course I has to earn,
 and it is the one most learners actually want. Courses II–IV extend to "you can
@@ -160,7 +161,8 @@ order (§8) is a separate thing.
 | **1 · Tokens, sampling and the API contract** — BPE from scratch; tokenizer pathologies (numbers, code, non-English, the leading space); context windows and truncation policy; temperature / top-k / top-p / repetition penalty; determinism and why you still don't get it; latency arithmetic (TTFT vs TPOT) and cost arithmetic; structured output modes; rate limits, retries, idempotency | 5 | 18 |
 | **2 · Prompting and structured output** — instruction structure; few-shot example *selection* as a retrieval problem; decomposition and chaining; self-consistency and its cost curve; JSON schema, validation and repair loops; constrained decoding (implement the logit mask) | 5 | 16 |
 | **3 · Embeddings, retrieval and RAG** — embedding geometry; exact vs approximate search (HNSW/IVF concepts against an exact baseline); BM25; hybrid fusion and RRF; chunking as an optimization problem; reranking; groundedness and citation; retrieval metrics; long-context vs retrieval; **RAG failure gallery lab** | 8 | 28 |
-| **4 · Agents and tool use** — the tool-calling protocol; the loop (ReAct-shaped) and its termination conditions; planning and decomposition; memory and state; multi-agent — when it helps and when it is just latency; sandboxing tool execution; **agent failure lab** | 6 | 18 |
+| **4 · Agents and tool use** — the tool-calling protocol; the loop (ReAct-shaped), termination conditions and **budget enforcement**; planning and decomposition; **agent memory** (working, episodic, semantic, compaction); **MCP as a protocol**; **skills and progressive context disclosure**; multi-agent — when it helps and when it is just latency; sandboxing, permissions and the **tool-output trust boundary**; **agent evaluation** (trajectories, replay, determinism); **agent failure lab** | 10 | 30 |
+| **16 · Multimodal systems** — cross-modal embedding geometry against a pinned CLIP-space fixture; multimodal retrieval and its failure modes; **vision-token cost and latency arithmetic**; document-understanding pipelines; multimodal evaluation | 5 | 18 |
 | Mini-projects (5) + Course I exam bank | — | — |
 | **Capstone I · Grounded assistant** | — | 45 |
 
@@ -172,6 +174,7 @@ order (§8) is a separate thing.
 | **6 · Training dynamics and memory arithmetic** — backprop through the block; optimizers and optimizer *state*; **why a 7B model needs ~84 GB to train in fp32** and how mixed precision, gradient checkpointing and accumulation change that; LR schedules and warmup; loss curves and what each pathology looks like; numerical stability | 6 | 32 |
 | **7 · Adaptation** — when *not* to fine-tune (the decision tree, with costs); SFT and data formatting; LoRA implemented and merged in NumPy, with exact parameter counts; QLoRA and what quantized base weights change; catastrophic forgetting, measured | 5 | 28 |
 | **8 · Preference optimization and scaling laws** — reward models; RLHF's moving parts; DPO and why it's the default now; evaluation of alignment; Chinchilla compute-optimal arithmetic; inference-compute tradeoffs | 4 | 20 |
+| **17 · Generative vision as a cost model** — diffusion described precisely (forward/reverse process, schedules); samplers and the step/quality/cost curve; latent space, resolution and the memory bill; video as frames × steps × resolution. **Arithmetic and tradeoffs, no implementation** — the same treatment Module 10 gives multi-GPU training, and named as such | 4 | 12 |
 | Mini-projects (4) | — | — |
 | **Capstone II · Train it, then adapt it** | — | 25 |
 
@@ -196,10 +199,17 @@ order (§8) is a separate thing.
 | Mini-projects (3) | — | — |
 | **Capstone IV · The eval harness that catches a planted regression** | — | 45 |
 
-**Program totals (targets):** 16 modules · **87 lessons** · ~1,300 quiz questions
-(870 lesson + 16 module exams) · ~200 in-browser exercises · 16 mini-projects ·
-4 capstones · **540 learner-hours** (4 × 135, capstones included) ⇒ **12 credits
-defensible; Course I alone ⇒ 3.**
+**Program totals (targets):** **18 modules** · **100 lessons** · ~1,300 quiz
+questions · ~230 in-browser exercises · 18 mini-projects · 4 capstones ·
+**582 learner-hours** ⇒ **~13 credits defensible**.
+
+The 2026-08-13 amendment moved these numbers and the headline changed with
+them, which is the point of recomputing rather than restating. Course I is now
+**165 hours** (10 + 18 + 16 + 28 + 30 + 18 + 45) rather than 135, so it reads as
+a **4-credit** course rather than a 3-credit one; Course II is **147**. The old
+"4 × 135 = 540 ⇒ 12 credits" symmetry is gone, and pretending otherwise would
+have meant a table that no longer sums to its own total — the defect §11 records
+this plan shipping once already.
 
 ---
 
@@ -411,6 +421,12 @@ Deliberately not building:
 - **RLHF at scale.** DPO-class methods and the concepts, not a training run.
 - **A model-release news feed.** `docs/living/frontier.md` is re-audited at
   phase boundaries, not maintained as journalism.
+- **Topics covered because they are current.** The 2026-08-13 amendment adds
+  MCP, skills, agent memory and multimodal work because each has a *mechanism*
+  worth implementing, and each is written that way: MCP as a protocol with a
+  message flow, skills as a context-budget selection problem, memory as a
+  storage-and-compaction tradeoff. Anything whose only claim is recency stays
+  out, because it dates in months and the rest of this plan does not.
 - **Safety or policy advocacy.** Prompt injection and the tool-execution trust
   boundary are covered as engineering (Module 15). Positions are not.
 - **Video on the critical path.** Optional recorded demos at phase boundaries;
@@ -993,3 +1009,76 @@ first needs it.
 Still outstanding before Module 3's lessons: `tools/record_embeddings.py`, the
 hand-run recorder producing int8-quantised 384-dimension vectors under the same
 dated, version-pinned contract as the tiktoken fixture.
+
+---
+
+## 16. Scope amendment — agents, multimodal, generative vision (2026-08-13)
+
+Requested after Module 3 closed: Course I covers no MCP, no skills and only one
+lesson of agent memory, and nothing anywhere in the plan covers multimodal work
+or image and video generation. Both observations were correct against §4 as
+written.
+
+### What was added, and why each earns its place
+
+**Module 4 grows from 6 lessons to 10.** MCP is a *protocol*, so a message
+flow, capability negotiation, tool-schema validation and error semantics are
+all implementable and gradeable with no network — it is the rare current topic
+with a spec to build against. Skills are a context-budget selection problem,
+close kin to lesson 2.2's few-shot selection and measurable the same way. Agent
+memory splits out of "memory and state" into a lesson of its own, because
+working, episodic and semantic memory have different storage and compaction
+tradeoffs and only one of them was going to fit alongside "state".
+
+Three further additions were chosen for being mechanisms nobody teaches and
+every agent gets wrong:
+
+- **Budget enforcement and termination**, folded into the loop lesson. Step
+  budgets, cost ceilings and loop detection are the most common way a real
+  agent fails, and they are a state machine plus arithmetic.
+- **The tool-output trust boundary**, folded into sandboxing. Module 15 covers
+  prompt injection generally; the agentic form — a tool returns attacker-
+  controlled text which the model then acts on — is distinct and gradeable by
+  taint tracking.
+- **Trajectory replay and determinism**, folded into agent evaluation. It is
+  what makes agent evaluation possible at all, and it is the cassette
+  philosophy of §5a applied one level up.
+
+Computer-use and parallel tool calls are covered at awareness level in §F only.
+Neither has a mechanism this constraint can grade honestly, and inventing one
+would be worse than saying so.
+
+**Module 16 · Multimodal systems** joins Course I with 5 lessons. Feasibility
+was checked before the module was promised:
+`sentence-transformers/clip-ViT-B-32-multilingual-v1` is Apache-2.0 with an
+ONNX export, so cross-modal geometry and retrieval run against a *real* pinned
+fixture on the pattern §5a already uses three times over. Vision-token cost
+arithmetic is gradeable in the same way lesson 1.3's chat overhead is.
+
+**Module 17 · Generative vision as a cost model** joins Course II with 4
+lessons, and is deliberately the smallest addition. A diffusion model cannot
+run in Pyodide, and generation has no deterministic gradeable output of the
+kind §5b requires, so this module is arithmetic and tradeoffs only — the same
+treatment Module 10 gives multi-GPU training, and named as such in the module
+title so nobody mistakes it for practice.
+
+### What it costs, and what it changed
+
+Thirteen new lessons, ≈ 105–180 authoring hours at §1's rate.
+
+The headline numbers moved and are restated rather than quietly kept:
+**Course I is now 165 learner-hours, not 135**, so it reads as a four-credit
+course; Course II is 147; the programme is 582 hours and ~13 credits across 18
+modules and 100 lessons. The tidy "4 × 135 = 540 ⇒ 12 credits" is gone. It was
+tidy because the plan was written before the content, and §11 already records
+what happens when this file's tables stop summing to its own totals.
+
+### Sequencing
+
+**Capstone I is built before any of this.** Module 4's six originally-planned
+lessons and Capstone I are what make P1 independently shippable, which is §1's
+most load-bearing structural commitment, and scope growth ahead of that
+milestone would trade a complete phase for a larger incomplete one. Module
+numbers are frozen, so the new modules take 16 and 17 while sitting inside
+Courses I and II respectively — numbering is an identifier here, and the course
+tables in §4 give reading order.
