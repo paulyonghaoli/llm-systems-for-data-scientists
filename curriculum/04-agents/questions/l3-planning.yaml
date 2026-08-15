@@ -1,0 +1,331 @@
+id: agt-l3
+lesson: modules/04-agents/03-planning-and-decomposition
+title: "4.3 - Planning and decomposition"
+questions:
+  - id: q1
+    type: single
+    difficulty: medium
+    prompt: >-
+      A static plan scores 0 of 5 on the discovered-dependency tasks. What
+      would fix it?
+    options:
+      - text: >-
+          Nothing that is still a plan. The argument is a fact execution
+          produces, so no plan written beforehand can contain it.
+        correct: true
+        explanation: >-
+          This is an information limit rather than a quality one, which is why
+          the lesson states it as a logical claim and measures only its cost.
+          The fixes are to interleave, to re-plan after the producing step, or
+          to replace the agent with a workflow.
+      - text: "A better planner, since a stronger model would guess the right filename."
+        correct: false
+        explanation: >-
+          The depot is not derivable from the goal — that is what makes it a
+          discovered dependency. A stronger model guesses more confidently, not
+          more correctly.
+      - text: "Retrying the failed call, since the tool is flaky."
+        correct: false
+        explanation: >-
+          The call fails deterministically on a wrong argument. Retrying it
+          reproduces the failure exactly, which is lesson 4.2's point about
+          patience being wasted where a retry cannot pay.
+      - text: "Validating the plan's arguments against the tool schema before executing."
+        correct: false
+        explanation: >-
+          `notes/depot.txt` is a string where a string was declared, so it
+          passes validation — lesson 4.1's `adversarial_value` row is the same
+          observation. A schema constrains type, not truth.
+
+  - id: q2
+    type: single
+    difficulty: hard
+    prompt: >-
+      Planning cut waits from 8.0 to 2.0 on the `parallel` tasks and only from
+      6.0 to 4.0 on the `static` ones. What explains the difference?
+    options:
+      - text: >-
+          The width of the task graph — `parallel` has four independent steps,
+          `static` is a chain.
+        correct: true
+        explanation: >-
+          An interleaved agent pays two waits per step, and a plan pays one to
+          think plus one per wave, so the speedup is roughly twice the width. A
+          plan over a chain saves almost nothing in latency however good it is.
+      - text: "The number of steps: four against three."
+        correct: false
+        explanation: >-
+          More steps make both strategies slower. What changes the *ratio* is
+          how many of them can go at once.
+      - text: "The `parallel` tasks use cheaper tools, so their calls return sooner."
+        correct: false
+        explanation: >-
+          Waits count sequential round-trips, not tool time; the sandbox has no
+          clock at all.
+      - text: "The `static` tasks needed a re-plan and the `parallel` ones did not."
+        correct: false
+        explanation: >-
+          Neither needed one — both are solved 5 of 5 by the static plan. The
+          difference is structural.
+
+  - id: q3
+    type: single
+    difficulty: hard
+    prompt: >-
+      On the discovered-dependency tasks, re-planning costs 276 tokens and 6.2
+      waits against 191 tokens and 5.2 waits for having no plan at all. Why is
+      the strategy built for this case losing on it?
+    options:
+      - text: >-
+          An interleaved agent reads the fact off the previous result as part
+          of an ordinary step; the re-planner pays a full plan call to learn
+          the same thing.
+        correct: true
+        explanation: >-
+          A plan call emits every step still to come, so it is several times
+          the size of a step call. Re-planning buys correctness here, not
+          efficiency.
+      - text: "Because re-planning fails more often, and failures are expensive."
+        correct: false
+        explanation: >-
+          Re-planning solves 5 of 5. It is more expensive despite succeeding
+          every time.
+      - text: "Because the re-planner cannot batch independent steps."
+        correct: false
+        explanation: >-
+          It batches exactly as the static planner does — on `parallel` both
+          take 2.0 waits. The `discovered` task is a chain anyway, so there is
+          nothing to batch.
+      - text: "Because it re-plans after every step rather than only on failure."
+        correct: false
+        explanation: >-
+          It re-plans only on failure. Re-planning every step is a different
+          and worse policy, costed separately in §G.
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      Re-planning after every step costs SPEC·n(n−1)/2 more than never
+      planning. Why does no OBS term appear in that expression?
+    options:
+      - text: >-
+          Both strategies read the whole history before every model call, so
+          the observation cost is identical and cancels.
+        correct: true
+        explanation: >-
+          The entire premium is re-emission: steps written down now that will
+          be written down again. That is also why the result survives the cost
+          model being wrong, while the break-even rate does not.
+      - text: "Because observations are free — only generated tokens are billed."
+        correct: false
+        explanation: >-
+          Input tokens are billed, usually at a lower rate. The term cancels
+          because it is the same on both sides, not because it is zero.
+      - text: "Because a plan call does not read the history at all."
+        correct: false
+        explanation: >-
+          It must, or it could not re-plan from the current state. That is
+          precisely what makes a re-plan able to resolve a discovered argument.
+      - text: "Because n(n−1)/2 already absorbs the observation growth."
+        correct: false
+        explanation: >-
+          The quadratic here comes from re-emitting steps. Observation growth
+          is also quadratic and appears identically in both totals, which is
+          why it disappears from the difference.
+
+  - id: q5
+    type: single
+    difficulty: medium
+    prompt: >-
+      The break-even surprise rate at five steps is reported as 0.600, with
+      0.800 and 0.400 under the cost constants halved and doubled. What is the
+      right way to use that?
+    options:
+      - text: >-
+          As a range: re-planning stops paying somewhere between 40% and 80%,
+          and quoting 0.600 alone would imply a precision the model does not have.
+        correct: true
+        explanation: >-
+          The constants are assumed rather than measured, so the sensitivity is
+          part of the result. The premium formula in the same section needs no
+          such caveat, which is the contrast worth noticing.
+      - text: "As a threshold: re-plan whenever fewer than 60% of steps surprise you."
+        correct: false
+        explanation: >-
+          That treats an assumed constant as a measured one. The same
+          computation gives 0.400 under a different and equally defensible
+          assumption.
+      - text: "Discard it — a number that moves that much under its assumptions is useless."
+        correct: false
+        explanation: >-
+          A range that excludes 0 and 1 still says something: neither "always
+          re-plan" nor "never re-plan" is right, and the crossover is at a
+          substantial surprise rate rather than a marginal one.
+      - text: "Average the three to get a more robust central estimate."
+        correct: false
+        explanation: >-
+          Averaging over assumptions you have no distribution for manufactures
+          a precision that was never there.
+
+  - id: q6
+    type: single
+    difficulty: medium
+    prompt: >-
+      The wave-building loop returns early when the computed batch is empty.
+      What happens without that check?
+    options:
+      - text: >-
+          A plan containing a dependency cycle makes the loop run forever,
+          turning a model error into an unresponsive process.
+        correct: true
+        explanation: >-
+          Models emit cyclic plans. Nothing ever becomes ready, so the batch is
+          empty every round and the remaining list never shrinks.
+      - text: "The last wave is dropped, so some steps are never executed."
+        correct: false
+        explanation: >-
+          The check does not affect a satisfiable graph at all — that path
+          exits when `remaining` empties.
+      - text: "Steps get scheduled before their dependencies."
+        correct: false
+        explanation: >-
+          The batch condition prevents that independently of when the loop
+          exits.
+      - text: "Nothing, provided the planner validates its own output first."
+        correct: false
+        explanation: >-
+          Then the validator has to detect cycles instead, which is the same
+          check moved elsewhere. Doing it here makes it unconditional.
+
+  - id: q7
+    type: multi
+    difficulty: hard
+    prompt: >-
+      Query planning in a database makes the same tradeoff. Which differences
+      push agents toward planning *less*? (Select all that apply.)
+    options:
+      - text: >-
+          The planner and the executor are the same expensive model, so a plan
+          call competes directly with the step calls it saves.
+        correct: true
+        explanation: >-
+          A query planner is cheap relative to execution, which is why
+          databases plan almost unconditionally. Here the break-even is a real
+          constraint.
+      - text: >-
+          An agent plan is executed once, so there is no amortisation over
+          repeated runs.
+        correct: true
+        explanation: >-
+          This is also where the compiler analogy breaks: a compiler's analysis
+          is paid once and reused, and an agent's is paid once and used once.
+      - text: >-
+          A wrong plan calls a file that does not exist, rather than merely
+          running slowly.
+        correct: true
+        explanation: >-
+          A bad query plan degrades performance; a bad agent plan takes an
+          action. That asymmetry is the argument for marking guessed arguments.
+      - text: >-
+          Agent task graphs are usually wider than query plans, so batching
+          matters less.
+        correct: false
+        explanation: >-
+          Width is an argument *for* planning, not against, and agent graphs
+          are typically narrow — three of the four kinds in §G have width 1.00.
+
+  - id: q8
+    type: single
+    difficulty: medium
+    prompt: >-
+      A benchmark lets a re-plan resolve every discovered argument, including
+      for steps whose dependencies have not run yet. What does that do?
+    options:
+      - text: >-
+          Makes re-planning look strictly better than interleaving, by handing
+          it facts it has not observed.
+        correct: true
+        explanation: >-
+          A benchmark-design error rather than a code bug, and the kind that
+          produces a flattering number nobody questions. The correct rule is
+          that a re-plan resolves only what the completed steps have produced.
+      - text: "Makes no difference, since the re-plan happens after the failure anyway."
+        correct: false
+        explanation: >-
+          It matters when an earlier step fails first: the re-planner would
+          then get the second step's argument without ever having run the step
+          that produces it.
+      - text: "Slows re-planning down, since it has more arguments to resolve."
+        correct: false
+        explanation: >-
+          The cost model charges by the number of steps emitted, not by how
+          many arguments are resolved.
+      - text: "Makes the static plan look better too, since both use the same resolver."
+        correct: false
+        explanation: >-
+          The static plan never re-plans, so it never resolves anything. Only
+          the re-planner benefits, which is what makes the comparison unfair.
+
+  - id: q9
+    type: single
+    difficulty: easy
+    prompt: >-
+      Why is a step limit a poor budget for a planning agent?
+    options:
+      - text: >-
+          A plan call's size scales with the number of steps it emits, so
+          bounding steps bounds nothing about the plan itself.
+        correct: true
+        explanation: >-
+          A planner asked to decompose a large task produces a large output in
+          a single call. Lesson 4.2's argument for budgeting in tokens applies
+          here with extra force.
+      - text: "Because planning agents take fewer steps, so the limit never binds."
+        correct: false
+        explanation: >-
+          Taking fewer steps is the saving, not the problem. The problem is
+          what one of those calls can cost.
+      - text: "Because a plan may contain more steps than the limit allows."
+        correct: false
+        explanation: >-
+          That is a real failure mode and the step limit handles it correctly —
+          it stops execution. The budget problem is about the plan call itself.
+      - text: "Because steps run in waves, so counting them is ambiguous."
+        correct: false
+        explanation: >-
+          Waves make latency accounting subtle and leave the step count
+          perfectly well defined.
+
+  - id: q10
+    type: single
+    difficulty: medium
+    prompt: >-
+      A task graph has 6 steps and a depth of 3. What does that tell you about
+      what planning can buy?
+    options:
+      - text: >-
+          Width is 2.0, so a plan can roughly halve the round-trips relative to
+          deciding one step at a time — and 3 waves is a floor nothing beats.
+        correct: true
+        explanation: >-
+          Depth is a hard floor on sequential round-trips, and width is how
+          much of the remaining gap a plan can close. Both come from the graph
+          rather than from the planner.
+      - text: "Nothing, until you know how expensive each tool call is."
+        correct: false
+        explanation: >-
+          Waits count round-trips, so the shape of the graph settles the
+          latency question independently of per-call cost.
+      - text: "That it has a discovered dependency, since depth is less than the step count."
+        correct: false
+        explanation: >-
+          Depth below step count means some steps are independent, which is the
+          opposite. A discovered dependency is about where an *argument* comes
+          from, not about ordering.
+      - text: "That the token saving from planning will be about 2×."
+        correct: false
+        explanation: >-
+          The token saving depends on the number of steps, and the latency
+          saving on their shape. §G's two columns disagree for exactly this
+          reason.

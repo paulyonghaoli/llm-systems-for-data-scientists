@@ -1,0 +1,145 @@
+id: agt-l3-breakeven
+title: "What re-planning costs, and the term that cancels"
+lesson: modules/04-agents/03-planning-and-decomposition
+description: |
+  Re-planning after every step is the same as having no plan, except more
+  expensive. Work out by exactly how much.
+
+  Both strategies read the whole history before every model call, so the
+  observation cost is identical and cancels; the only difference is what gets
+  emitted. A step call writes one step. A plan call writes every step still to
+  come. The premium is therefore pure re-emission — steps written down now that
+  will be written down again.
+
+  Write `interleaved_cost(n)`, `replan_cost(n)` and `premium(n)`. The last test
+  is the one worth reading first: `premium` must come out the same whether an
+  observation costs 45 tokens or 200, because if your OBS terms do not cancel,
+  one of the two strategies is reading a different history than the other.
+
+  The starter re-plans `n` times for `n` steps. A re-plan happens *after* a
+  step, so there are at most `n - 1` of them — re-planning once the last step
+  is done would be planning nothing. That off-by-one is the one the lesson's
+  author shipped, and it inflates the answer by half again.
+
+setup_code: |
+  #: Tokens to write one step of a plan, and to carry one observation.
+  SPEC = 25
+  OBS = 45
+
+  def step_cost(observations, obs=OBS):
+      """Read the history, emit one call."""
+      return obs * observations + SPEC
+
+  def plan_cost(remaining, observations, obs=OBS):
+      """Read the same history, emit every step still to come."""
+      return obs * observations + SPEC * remaining
+
+starter_code: |
+  def interleaved_cost(n, obs=OBS):
+      """Total tokens for deciding one step at a time, n steps."""
+      return sum(step_cost(i, obs) for i in range(n))
+
+
+  def replan_cost(n, obs=OBS):
+      """Total tokens for planning up front, then re-planning after every step."""
+      total = plan_cost(n, 0, obs)
+      # Off by one: this re-plans after the last step too, where there is
+      # nothing left to plan.
+      for i in range(n):
+          total += plan_cost(n - i, i, obs)
+      return total
+
+
+  def premium(n, obs=OBS):
+      """How much more re-planning every step costs than never planning."""
+      return replan_cost(n, obs) - interleaved_cost(n, obs)
+
+
+  for n in (1, 2, 3, 5, 8):
+      print(f"n={n}  interleaved={interleaved_cost(n):>5}  "
+            f"replan={replan_cost(n):>5}  premium={premium(n):>5}  "
+            f"closed form={SPEC * n * (n - 1) // 2:>5}")
+
+tests: |
+  assert interleaved_cost(5) == 575, (
+      f"interleaved_cost(5) came out {interleaved_cost(5)}, expected 575: five "
+      "step calls, reading 0 through 4 observations."
+  )
+
+  p5 = premium(5)
+  assert p5 == 250, (
+      f"premium(5) came out {p5}, expected 250. A re-plan happens AFTER a step, "
+      "so a five-step task has at most four of them -- re-planning once the "
+      "last step is done would be planning nothing, and counting it inflates "
+      "the answer to 375."
+  )
+
+  # The closed form, which is the point of the whole exercise.
+  for n in range(1, 11):
+      assert premium(n) == SPEC * n * (n - 1) // 2, (
+          f"premium({n}) = {premium(n)}, but SPEC * n * (n - 1) / 2 = "
+          f"{SPEC * n * (n - 1) // 2}. The premium is exactly the cost of "
+          "re-emitting steps you will emit again."
+      )
+
+  assert premium(1) == 0, (
+      "a one-step task has nowhere to re-plan, so re-planning costs nothing extra"
+  )
+  assert premium(2) == 25, "two steps means one re-plan, emitting one step twice"
+
+  # The premium grows with the square of the length, which is why "re-plan
+  # often" is a worse policy the longer the task.
+  assert premium(10) == 4 * premium(5) + 125, (
+      f"doubling the length should roughly quadruple the premium: "
+      f"premium(10)={premium(10)}, premium(5)={premium(5)}"
+  )
+
+  # THE structural test: no OBS term survives, because both strategies read
+  # exactly the same history.
+  for obs in (0, 10, 45, 200, 5000):
+      assert premium(5, obs) == 250, (
+          f"with an observation costing {obs} tokens the premium came out "
+          f"{premium(5, obs)} instead of 250. Both strategies read the whole "
+          "history before every model call, so every observation term has to "
+          "cancel -- if it does not, one of the two functions is charging for "
+          "a history the other is not."
+      )
+  for n in (3, 7):
+      assert premium(n, 0) == premium(n, 500), (
+          f"premium({n}) still depends on the observation cost"
+      )
+
+  # And a sanity check that the two cost functions have not drifted apart:
+  # planning one remaining step is exactly a step call.
+  for observations in (0, 3, 9):
+      assert plan_cost(1, observations) == step_cost(observations), (
+          "a plan with one step left to emit costs the same as a step call; if "
+          "not, the two functions disagree about something other than output size"
+      )
+
+hints:
+  - "`range(1, n)` — a re-plan follows a step, and the last step has no successor."
+  - >-
+    At the re-plan after step i there are i observations in the history and
+    n - i steps still to emit.
+  - >-
+    If the OBS test fails, compare the observation counts: interleaved reads
+    0..n-1, and the re-plans read 1..n-1 plus the initial plan's zero.
+
+solution: |
+  def interleaved_cost(n, obs=OBS):
+      """Total tokens for deciding one step at a time, n steps."""
+      return sum(step_cost(i, obs) for i in range(n))
+
+
+  def replan_cost(n, obs=OBS):
+      """Total tokens for planning up front, then re-planning after every step."""
+      total = plan_cost(n, 0, obs)
+      for i in range(1, n):
+          total += plan_cost(n - i, i, obs)
+      return total
+
+
+  def premium(n, obs=OBS):
+      """How much more re-planning every step costs than never planning."""
+      return replan_cost(n, obs) - interleaved_cost(n, obs)

@@ -147,6 +147,22 @@ def test_flaky_tool_is_deterministic():
     assert len(set(repeats)) == 1, "retrying must not change the outcome within a seed"
 
 
+def test_depot_defaults_are_unchanged():
+    """Lessons 4.1 and 4.2 see one depot; only 4.3 populates the mapping."""
+    box = Sandbox(seed=1, failure_rate=0.0)
+    assert box.call("shipment_status", {"shipment": "TL-4471"})["value"]["depot"] == "north-east"
+
+
+def test_depots_make_a_dependency_discoverable():
+    """4.3 needs an answer that is not knowable before the lookup happens."""
+    box = Sandbox(seed=1, failure_rate=0.0,
+                  depots={"TL-4471": "south-west", "TL-9002": "central"})
+    assert box.call("shipment_status", {"shipment": "TL-4471"})["value"]["depot"] == "south-west"
+    assert box.call("shipment_status", {"shipment": "TL-9002"})["value"]["depot"] == "central"
+    # Anything unmapped keeps the default, so the extension is purely additive.
+    assert box.call("shipment_status", {"shipment": "TL-0000"})["value"]["depot"] == "north-east"
+
+
 def test_specs_are_self_describing():
     """Gate 20's rule, applied to the model: nothing is handed over undescribed."""
     for spec in Sandbox().specs():

@@ -160,6 +160,11 @@ class Sandbox:
     docs: list[tuple[str, str]] = field(default_factory=lambda: list(DEFAULT_DOCS))
     failure_rate: float = 0.4
     calls: list[dict] = field(default_factory=list)
+    #: Which depot each shipment sits at. Empty means every shipment is at the
+    #: north-east one, which is the only behaviour lessons 4.1 and 4.2 see.
+    #: Module 4.3 populates it, because a task whose second step depends on the
+    #: answer to its first needs an answer that is not knowable in advance.
+    depots: dict[str, str] = field(default_factory=dict)
 
     def specs(self) -> list[ToolSpec]:
         return [
@@ -254,7 +259,8 @@ class Sandbox:
             rng = random.Random(f"{self.seed}:{shipment}")
             if rng.random() < self.failure_rate:
                 raise TimeoutError(f"status service timed out for {shipment}")
-            return {"shipment": shipment, "status": "in transit", "depot": "north-east"}
+            return {"shipment": shipment, "status": "in transit",
+                    "depot": self.depots.get(shipment, "north-east")}
 
         raise AssertionError(f"unreachable: {name}")
 

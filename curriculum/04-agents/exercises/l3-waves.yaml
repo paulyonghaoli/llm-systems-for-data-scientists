@@ -1,0 +1,142 @@
+id: agt-l3-waves
+title: "Order is not a dependency"
+lesson: modules/04-agents/03-planning-and-decomposition
+description: |
+  A plan that records only the *order* of its steps throws away the difference
+  between "B must follow A" and "B happens to be written after A" — and that
+  difference is the entire latency saving planning offers. The lesson measures
+  it: four independent lookups take 8.0 sequential round-trips one step at a
+  time and 2.0 from a plan that knows they are independent.
+
+  Write `waves(after)`, which groups steps into batches that can be dispatched
+  together. `after[i]` is the tuple of step indices that must complete before
+  step `i` may run.
+
+  The starter records order: one step per wave, in index sequence. It is
+  correct on a chain and wrong on everything else.
+
+  !!! warning "Read this before you write the loop"
+      A plan can contain a dependency **cycle** — step 2 waiting on step 3
+      while step 3 waits on step 2. Models emit these. The natural
+      implementation is `while remaining:` with a batch computed each round,
+      and on a cyclic graph the batch comes back empty and that loop never
+      ends. Return what you have instead. `CYCLIC` is in the demo output from
+      your first Run so this is not a surprise later.
+
+setup_code: |
+  #: Task graphs as dependency lists: after[i] holds the indices step i waits on.
+  GRAPHS = {
+      "chain":   [(), (0,), (1,)],              # 0 -> 1 -> 2
+      "fan":     [(), (), (), ()],              # nothing depends on anything
+      "diamond": [(), (0,), (0,), (1, 2)],      # 0 -> {1, 2} -> 3
+      "mixed":   [(), (), (0,), (0, 1), (), (3,)],
+      "cyclic":  [(1,), (0,)],                  # 0 waits on 1, 1 waits on 0
+      "partial": [(), (0,), (3,), (2,)],        # 0 -> 1 fine; 2 and 3 deadlock
+  }
+
+  def describe(name, batches, n_steps):
+      """One line per graph: its waves, depth and width."""
+      depth = len(batches)
+      covered = sum(len(b) for b in batches)
+      width = round(n_steps / depth, 2) if depth else None
+      return (f"{name:<9} waves={batches}  depth={depth}  "
+              f"width={width}  covers={covered}/{n_steps}")
+
+starter_code: |
+  def waves(after):
+      """Steps grouped into batches that can be dispatched together."""
+      # Records order, not dependencies: every step gets its own wave, so a
+      # plan over four independent lookups still takes four round-trips.
+      return [[i] for i in range(len(after))]
+
+
+  for name, graph in GRAPHS.items():
+      print(describe(name, waves(graph), len(graph)))
+
+tests: |
+  assert waves(GRAPHS["chain"]) == [[0], [1], [2]], (
+      f"a chain has one step per wave; got {waves(GRAPHS['chain'])}"
+  )
+
+  fan = waves(GRAPHS["fan"])
+  assert fan == [[0, 1, 2, 3]], (
+      f"the four independent steps came back as {fan}, expected one wave of "
+      "all four. Nothing in that graph depends on anything, so every call can "
+      "be in flight at once -- this is the difference between 8.0 waits and "
+      "2.0 in the lesson, and a planner that emits them one per wave has "
+      "recorded their order rather than their dependencies."
+  )
+
+  dia = waves(GRAPHS["diamond"])
+  assert dia == [[0], [1, 2], [3]], (
+      f"the diamond came back as {dia}, expected [[0], [1, 2], [3]]: steps 1 "
+      "and 2 both wait only on 0, so they go together, and 3 waits on both."
+  )
+
+  mixed = waves(GRAPHS["mixed"])
+  assert mixed == [[0, 1, 4], [2, 3], [5]], (
+      f"mixed came back as {mixed}, expected [[0, 1, 4], [2, 3], [5]]. Step 4 "
+      "has no dependencies at all, so it belongs in the first wave even though "
+      "it is written after steps that do."
+  )
+
+  # Batches must be sorted, so two runs of the same plan schedule identically.
+  for name, graph in GRAPHS.items():
+      for batch in waves(graph):
+          assert batch == sorted(batch), (
+              f"{name} produced an unsorted batch {batch}; a schedule that "
+              "reorders between runs makes two identical plans undiffable"
+          )
+
+  # A cycle is an ordinary model output, not an exceptional one.
+  cyc = waves(GRAPHS["cyclic"])
+  assert cyc == [], (
+      f"a fully cyclic graph should yield no waves at all, got {cyc}. If this "
+      "test hung rather than failed, the loop has no check for an empty batch."
+  )
+
+  part = waves(GRAPHS["partial"])
+  assert part == [[0], [1]], (
+      f"the satisfiable half should still be scheduled, got {part}: steps 0 "
+      "and 1 are fine, and only 2 and 3 deadlock on each other."
+  )
+
+  # Every step reachable from a satisfiable dependency set must appear once.
+  for name in ("chain", "fan", "diamond", "mixed"):
+      flat = [i for batch in waves(GRAPHS[name]) for i in batch]
+      assert sorted(flat) == list(range(len(GRAPHS[name]))), (
+          f"{name}: every step should be scheduled exactly once, got {flat}"
+      )
+
+  # And no step may be scheduled before something it waits on.
+  for name, graph in GRAPHS.items():
+      placed = set()
+      for batch in waves(graph):
+          for i in batch:
+              assert set(graph[i]) <= placed, (
+                  f"{name}: step {i} waits on {graph[i]} but was scheduled "
+                  f"before {set(graph[i]) - placed} had run"
+              )
+          placed |= set(batch)
+
+hints:
+  - "Each round, take every remaining step whose dependencies are all already placed."
+  - >-
+    Guard the loop: if the batch you just computed is empty, nothing further can
+    ever become ready, so return what you have rather than going round again.
+  - "`[i for i in remaining if set(after[i]) <= placed]` keeps index order for free."
+
+solution: |
+  def waves(after):
+      """Steps grouped into batches that can be dispatched together."""
+      out = []
+      placed = set()
+      remaining = list(range(len(after)))
+      while remaining:
+          batch = [i for i in remaining if set(after[i]) <= placed]
+          if not batch:
+              return out          # a cycle, or an unsatisfiable dependency
+          out.append(batch)
+          placed |= set(batch)
+          remaining = [i for i in remaining if i not in placed]
+      return out
