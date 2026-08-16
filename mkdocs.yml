@@ -65,7 +65,10 @@ extra_javascript:
 nav:
   - Home: index.md
   - Curriculum map: curriculum.md
-  - "Pinned versions (living doc)": living/models.md
+  - "Living docs":
+      - "Pinned versions": living/models.md
+      - "The frontier": living/frontier.md
+      - "The role field": living/roles.md
   - Glossary: glossary.md
   - "My progress": progress.md
   - "Module 0 · From data science to LLM systems":

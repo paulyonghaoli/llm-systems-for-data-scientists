@@ -45,9 +45,21 @@ Python and numeric text by nothing at all, and Japanese by roughly a quarter.
 
 ## Model names, prices and context limits
 
-Deliberately absent. This curriculum teaches mechanisms that outlive a model
-generation, and a table of prices would be wrong within months of being
-written. When Course I's later lessons need concrete figures for cost
-arithmetic, they will use figures the learner supplies for whichever provider
-they actually use — which is also the only version of the exercise that is
-worth anything.
+Absent from the *lessons*, deliberately, and that is the CI gate above. This
+curriculum teaches mechanisms that outlive a model generation, and a table of
+prices would be wrong within months of being written. When a lesson needs
+concrete figures for cost arithmetic, it uses figures the learner supplies for
+whichever provider they actually use — which is also the only version of the
+exercise that is worth anything.
+
+Where the state of the field genuinely has to be discussed, it is discussed
+here in `docs/living/`, dated and with its sources marked:
+
+- **[The frontier](frontier.md)** — evaluation, agent reliability, effective
+  context length, cost and the open-weight gap, and how each maps onto a
+  module. Researched 2026-08-16.
+- **[The role field](roles.md)** — where this work sits in the job market, and
+  a blunt note on how much of that literature is untraceable. Researched
+  2026-08-16.
+
+Both carry a re-audit checklist rather than a promise to stay current.

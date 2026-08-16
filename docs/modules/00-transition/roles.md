@@ -13,6 +13,11 @@ things at different companies, so this describes **work**, not titles.
 Treat it as a map for deciding what to learn next, not as career advice — and
 note the volatility flag at the top of this page.
 
+For the *market* rather than the work — which titles are growing, what the
+compensation distribution actually looks like, and a blunt note on how little
+of that literature is traceable to a source — see the living document
+[the role field](../../living/roles.md), which is dated and re-audited.
+
 ## The five kinds of work
 
 **Applied / product.** Building features on top of models somebody else
