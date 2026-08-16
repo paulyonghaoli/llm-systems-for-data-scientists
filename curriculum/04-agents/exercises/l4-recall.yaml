@@ -1,0 +1,149 @@
+id: agt-l4-recall
+title: "The retention test that flatters every window"
+lesson: modules/04-agents/04-agent-memory
+description: |
+  Before you can compare memory policies you need to answer one question about
+  a single fact: **is it still there?** Get that wrong and every number
+  downstream is wrong in the flattering direction.
+
+  Write `holds(retained, fact)`. `retained` is what the agent has in context —
+  `{"texts": {origin_index: text}, "keyed": {key: value}}` — and `fact` records
+  where it came from, the text that establishes it, and its key if it had one.
+
+  The starter searches all of context for the fact's text. That is the obvious
+  implementation and it is wrong, because a later observation can re-state the
+  same sentence: observation 3 here is a search result quoting the file read at
+  observation 1, so a window that dropped observation 1 gets credit for its
+  fact anyway. In the lesson's first draft that bug gave a six-step window
+  0.70 recall on facts fifteen steps old, which is impossible.
+
+  A fact belongs to the observation that established it. It is retained only if
+  **that** observation's evidence survives — or if it arrived with a key and the
+  key is in the store, which is the one legitimate way a fact outlives its text.
+
+setup_code: |
+  #: A six-step trajectory. Note observation 3: a search result that repeats,
+  #: word for word, the sentence established by the file read at observation 1.
+  OBS = {
+      0: 'shipment_status({"shipment": "TL-4471"}) -> {"depot": "south-west"}',
+      1: 'read_file({"path": "notes/policy.txt"}) -> "A hold lasts up to 48 hours"',
+      2: 'calculator({"expression": "48 / 2"}) -> 24.0',
+      3: 'search({"query": "hold"}) -> [{"text": "A hold lasts up to 48 hours"}]',
+      4: 'read_file({"path": "notes/bays.txt"}) -> "Bay 4 handles exceptions"',
+      5: 'shipment_status({"shipment": "TL-9002"}) -> {"depot": "central"}',
+  }
+
+  #: Facts a later step might need. `key` is set only when the fact arrived
+  #: with one, which is the condition under which an extractor can capture it.
+  FACTS = [
+      {"origin": 0, "needle": "south-west", "key": "depot:TL-4471"},
+      {"origin": 1, "needle": "A hold lasts up to 48 hours", "key": None},
+      {"origin": 4, "needle": "Bay 4 handles exceptions", "key": None},
+      {"origin": 5, "needle": "central", "key": "depot:TL-9002"},
+  ]
+
+  def window(step, w=2):
+      """The last `w` observations before `step`, tagged with their origin."""
+      return {i: OBS[i] for i in range(max(0, step - w), step)}
+
+  def everything(step):
+      """Every observation before `step`, tagged with its origin."""
+      return {i: OBS[i] for i in range(step)}
+
+starter_code: |
+  def holds(retained, fact):
+      """Whether this fact is still available to the agent."""
+      if fact["key"] is not None and fact["key"] in retained["keyed"]:
+          return True
+      # Searches all of context. A later observation quoting the same sentence
+      # counts as the earlier one surviving, which it is not.
+      return fact["needle"] in " ".join(retained["texts"].values())
+
+
+  for step in (4, 5, 6):
+      held = {"texts": window(step), "keyed": {}}
+      kept = [f["origin"] for f in FACTS if holds(held, f)]
+      print(f"step {step}: context holds observations {sorted(window(step))}, "
+            f"facts from {kept} survive")
+
+tests: |
+  full = {"texts": everything(6), "keyed": {}}
+  for fact in FACTS:
+      assert holds(full, fact), (
+          f"a policy that keeps every observation cannot have lost the fact "
+          f"from observation {fact['origin']}; this is the invariant that "
+          "makes the rest of the measurement believable"
+      )
+
+  # The whole point. Observation 1 was evicted; observation 3 merely quotes it.
+  windowed = {"texts": window(5), "keyed": {}}
+  stale = FACTS[1]
+  assert not holds(windowed, stale), (
+      "the fact from observation 1 was reported as retained, but a two-step "
+      "window at step 5 holds only observations 3 and 4. Observation 3 is a "
+      "search result that happens to quote the same sentence -- crediting it "
+      "means a window scores for facts it dropped, and every recall number "
+      "built on this comes out too high."
+  )
+
+  assert holds(windowed, FACTS[2]), (
+      "the fact from observation 4 IS in the window at step 5 and must count"
+  )
+  for fact in (FACTS[0], FACTS[3]):
+      assert not holds(windowed, fact), (
+          f"observation {fact['origin']} is outside the window at step 5"
+      )
+
+  # A keyed fact outlives its text -- the one legitimate way to survive eviction.
+  extracted = {"texts": window(5), "keyed": {"depot:TL-4471": "south-west"}}
+  assert holds(extracted, FACTS[0]), (
+      "the key was extracted at write time, so the fact survives even though "
+      "the observation that carried it is long gone"
+  )
+  assert not holds(extracted, FACTS[3]), (
+      "extracting one key does not retain a different one"
+  )
+
+  # Truncation keeps the front of an observation, so a fact at the back is lost
+  # even though its origin is still nominally in context.
+  clipped = {"texts": {0: OBS[0][:30]}, "keyed": {}}
+  assert not holds(clipped, FACTS[0]), (
+      f"observation 0 truncated to 30 characters is {OBS[0][:30]!r}, which no "
+      "longer contains the depot. Truncation retains whatever happened to be "
+      "at the front, and a fact is only held if its own evidence survives."
+  )
+
+  # And the shape that matters: a window's recall is a cliff, not a slope.
+  def recall(distance, w=2):
+      total = hits = 0
+      for fact in FACTS:
+          step = fact["origin"] + distance + 1
+          if step > 6:
+              continue
+          total += 1
+          hits += holds({"texts": window(step, w), "keyed": {}}, fact)
+      return hits / total if total else None
+
+  assert recall(0) == 1.0, "a fact needed immediately is always still in the window"
+  assert recall(1) == 1.0, "a two-step window still holds a fact from one step ago"
+  assert recall(2) == 0.0, (
+      f"recall two steps out came to {recall(2)}, expected 0.0. A two-step "
+      "window either holds a fact or it does not -- there is no distance at "
+      "which it is partially degraded, which is why nothing warns you before "
+      "the facts stop being there."
+  )
+  assert recall(3) == 0.0, "and it stays at zero; the cliff has no far side"
+
+hints:
+  - "Look only at the text from the fact's own origin: `retained['texts'].get(fact['origin'])`."
+  - "`.get(origin, '')` handles the evicted case without a branch."
+  - >-
+    The keyed check stays exactly as it is — a key in the store is the one way a
+    fact legitimately survives its observation being dropped.
+
+solution: |
+  def holds(retained, fact):
+      """Whether this fact is still available to the agent."""
+      if fact["key"] is not None and fact["key"] in retained["keyed"]:
+          return True
+      return fact["needle"] in retained["texts"].get(fact["origin"], "")

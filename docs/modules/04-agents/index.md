@@ -45,7 +45,7 @@ part that will still be true when the format is not.
 1. [4.1 The tool-calling protocol](01-tool-calling-protocol.md) — **available**
 2. [4.2 The loop, and when to stop it](02-loop-and-termination.md) — **available**
 3. [4.3 Planning and decomposition](03-planning-and-decomposition.md) — **available**
-4. 4.4 Agent memory: working, episodic, semantic, and compaction — *planned*
+4. [4.4 Agent memory](04-agent-memory.md) — **available**
 5. 4.5 MCP as a protocol — *planned*
 6. 4.6 Agent evaluation: trajectories, replay and determinism — *planned*
 7. 4.7 Skills and progressive context disclosure — *planned*

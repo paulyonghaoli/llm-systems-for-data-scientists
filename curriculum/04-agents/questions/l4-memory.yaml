@@ -1,0 +1,319 @@
+id: agt-l4
+lesson: modules/04-agents/04-agent-memory
+title: "4.4 - Agent memory"
+questions:
+  - id: q1
+    type: single
+    difficulty: medium
+    prompt: >-
+      A 20-step episode contains 479 tokens of observations, and carrying them
+      costs 5,078. Where does the factor of ten come from?
+    options:
+      - text: >-
+          Context is re-read before every model call, so an observation from
+          step 3 is paid for on all seventeen steps after it.
+        correct: true
+        explanation: >-
+          The bill is a sum over steps rather than over observations, so it
+          grows with the square of the episode length. That is the arithmetic
+          that makes memory management necessary at all.
+      - text: "Tool results are verbose, so each observation is stored several times over."
+        correct: false
+        explanation: >-
+          Each is stored once. It is *read* many times, which is what costs.
+      - text: "The tokenizer expands JSON, roughly tenfold against plain prose."
+        correct: false
+        explanation: >-
+          JSON is token-hungry — that is lesson 1.1's finding — but nowhere
+          near tenfold, and the 479 figure already counts the JSON.
+      - text: "Because the model's output is charged at the same rate as its input."
+        correct: false
+        explanation: >-
+          Output pricing is real and usually higher, and it is not what this
+          multiple measures — every token here is context.
+
+  - id: q2
+    type: single
+    difficulty: hard
+    prompt: >-
+      Truncating old observations shows a 29.3% gross saving and a −4.7% net
+      one. What has gone wrong?
+    options:
+      - text: >-
+          It is lossy but not compact: it still pays to carry what it kept, and
+          pays again to re-fetch what it lost.
+        correct: true
+        explanation: >-
+          It gave back 116% of its gross saving. A compaction has to be
+          aggressive enough that what remains is cheap, or faithful enough that
+          nothing needs fetching again; this is neither.
+      - text: "The truncation prefix was set too aggressively, so too much was lost."
+        correct: false
+        explanation: >-
+          More aggressive truncation would lose more facts *and* carry less.
+          The problem is that it is halfway on both axes at once.
+      - text: "Re-fetches were charged twice, once as a tool call and once as context."
+        correct: false
+        explanation: >-
+          Both are real costs and both are paid. The re-fetched observation
+          genuinely is carried for the rest of the episode.
+      - text: "Truncation broke the JSON, so the observations became unparseable."
+        correct: false
+        explanation: >-
+          A truncated observation is still readable text in context, and the
+          measurement charges for it either way.
+
+  - id: q3
+    type: single
+    difficulty: hard
+    prompt: >-
+      A window's recall reads 1.000 at distances 1, 3 and 5, then 0.000 at 8
+      and 12. Why does the lesson call this the dangerous shape rather than
+      simply a low score?
+    options:
+      - text: >-
+          There is no regime where it is partially degraded, so nothing warns
+          you before the facts stop being there.
+        correct: true
+        explanation: >-
+          A gradual decline shows up as slightly worse answers and prompts
+          investigation. A cliff produces perfect behaviour until it produces
+          none, and the transition is invisible from the outside.
+      - text: "Because 0.000 is worse than any other policy scores."
+        correct: false
+        explanation: >-
+          Structured extraction scores 0.000 on prose facts at every distance,
+          including distance one. The objection is about the shape, not the
+          floor.
+      - text: "Because the window size is a hyperparameter nobody tunes."
+        correct: false
+        explanation: >-
+          Tuning it moves the cliff; it does not turn it into a slope.
+      - text: "Because recall should be measured against tokens, not distance."
+        correct: false
+        explanation: >-
+          Distance is the axis that matters, because it is what connects a
+          retention policy to the task's dependency structure.
+
+  - id: q4
+    type: single
+    difficulty: hard
+    prompt: >-
+      LRU eviction works because of temporal locality. Why does the lesson say
+      that assumption inverts inside an agent episode?
+    options:
+      - text: >-
+          The facts a later step depends on are the ones established earliest,
+          since that is what makes them dependencies.
+        correct: true
+        explanation: >-
+          Lesson 4.3's discovered dependencies are early-produced and
+          late-consumed by construction. Evicting by age is therefore evicting
+          by a signal pointing the wrong way.
+      - text: "Because agent episodes are too short for locality to develop."
+        correct: false
+        explanation: >-
+          Length is not the issue; a longer episode makes the problem worse
+          rather than introducing it.
+      - text: "Because observations arrive in a fixed order, so recency is meaningless."
+        correct: false
+        explanation: >-
+          Recency is perfectly well defined here. It is well defined and
+          anti-correlated with need, which is worse than meaningless.
+      - text: "Because an agent re-reads all of its context, so nothing is ever 'least recently used'."
+        correct: false
+        explanation: >-
+          A neat observation about the mechanism and not the argument: eviction
+          policies here order by when a fact was *established*, not when the
+          text was last scanned.
+
+  - id: q5
+    type: single
+    difficulty: medium
+    prompt: >-
+      Structured extraction scores 1.000 on keyed facts at every distance and
+      0.000 on prose facts at distance one. What does the second number mean?
+    options:
+      - text: >-
+          It never had them. A fact stated in prose has no key, so nothing
+          knows to look for it unless someone anticipated it.
+        correct: true
+        explanation: >-
+          This is not decay — there is no distance at which it did better. It
+          is why a keyed store is not a memory system on its own.
+      - text: "Prose facts decay fastest, so even one step is enough to lose them."
+        correct: false
+        explanation: >-
+          Nothing decays here. The extractor's coverage is fixed at write time
+          by what has field names.
+      - text: "The extractor ran after the prose observations had already been evicted."
+        correct: false
+        explanation: >-
+          Extraction happens at write time, on every observation. It captures
+          nothing from prose because there is no key to capture.
+      - text: "Prose facts were stored but under keys the recall test did not check."
+        correct: false
+        explanation: >-
+          Then the test would be wrong rather than the policy. The retention
+          check looks up the fact's own key, and prose facts have none.
+
+  - id: q6
+    type: single
+    difficulty: hard
+    prompt: >-
+      The value of compacting once at step *k* peaks at step 11 of 20, not at
+      step 1. Why?
+    options:
+      - text: >-
+          Value is (tokens accumulated by then) × (steps remaining), a rising
+          term times a falling one, so the product turns over in the middle.
+        correct: true
+        explanation: >-
+          Compacting at step 3 multiplies by many remaining steps and has
+          almost nothing to compact. The lesson's author predicted
+          earlier-is-better and the measurement said otherwise.
+      - text: "Because compacting early would lose facts that later steps need."
+        correct: false
+        explanation: >-
+          True and separate. The 1,449-token figure is pure cost arithmetic and
+          takes no account of recall at all.
+      - text: "Because the largest observations happen to arrive around step 11."
+        correct: false
+        explanation: >-
+          The peak is a property of the product rather than of any one
+          observation, though a front-loaded episode does move it earlier.
+      - text: "Because the compactor needs enough history to summarise accurately."
+        correct: false
+        explanation: >-
+          No summariser quality enters this calculation — the compaction here
+          is truncation, and the value would be identical for a perfect one.
+
+  - id: q7
+    type: single
+    difficulty: medium
+    prompt: >-
+      Retention was first measured by searching all of context for the fact's
+      text, which gave a six-step window 0.70 recall on facts fifteen steps
+      old. What was happening?
+    options:
+      - text: >-
+          A later observation re-stated the same sentence, so the window got
+          credit for a fact it had evicted.
+        correct: true
+        explanation: >-
+          A repeated search returns the same documents. Tagging retained text
+          with its origin index fixes it, and the fix is what makes every other
+          number in the lesson believable.
+      - text: "The window was implemented off by one, so it held seven observations."
+        correct: false
+        explanation: >-
+          That would inflate recall by one step, not by fifteen.
+      - text: "Facts were being double-counted, so the denominator was too small."
+        correct: false
+        explanation: >-
+          Both numerator and denominator ran over the same fact list. The
+          numerator was counting the wrong evidence.
+      - text: "The keyed store was leaking prose facts into the text check."
+        correct: false
+        explanation: >-
+          The keyed store was empty for a pure window policy, so it could not
+          contribute anything.
+
+  - id: q8
+    type: multi
+    difficulty: medium
+    prompt: >-
+      Which of these are fair criticisms of the experiment as run? (Select all
+      that apply.)
+    options:
+      - text: >-
+          The compactor truncates rather than summarising, and a real
+          summariser would retain more per token.
+        correct: true
+        explanation: >-
+          Stated in the module docstring. The argument does not depend on the
+          compactor's quality — only on compaction being lossy, silent, and
+          timing-sensitive.
+      - text: >-
+          Which facts a later step needs is authored, not observed from real
+          agent runs.
+        correct: true
+        explanation: >-
+          Which is why need-distance is swept rather than picked, so the result
+          is a curve rather than one constructed number.
+      - text: >-
+          The re-fetch accounting fixes a single need-distance, so it only
+          examines facts from the first half of the episode.
+        correct: true
+        explanation: >-
+          Also stated. It is applied identically to every policy, so the
+          comparison is fair, but the absolute counts are not a population
+          estimate.
+      - text: >-
+          The observation sizes are invented, so the token totals mean nothing.
+        correct: false
+        explanation: >-
+          Every observation is a real `llmlab.tools` envelope, so the sizes are
+          measured. That was the point of building the episode from actual
+          calls.
+
+  - id: q9
+    type: single
+    difficulty: easy
+    prompt: >-
+      Why does the lesson call an agent's memory a cache with silent misses?
+    options:
+      - text: >-
+          A dropped fact produces no signal: the model proceeds with what is
+          there, and a wrong answer looks the same as a considered one.
+        correct: true
+        explanation: >-
+          An ordinary cache miss is an event you can count. This one has no
+          symptom unless you go looking for a fact you already know was needed,
+          which is why the lesson measures recall directly.
+      - text: "Because the cache is never invalidated, so stale entries persist."
+        correct: false
+        explanation: >-
+          Staleness is a separate problem — lesson 4.3's plan-as-cache. Here
+          the entry is gone rather than out of date.
+      - text: "Because the miss is logged at debug level and usually filtered out."
+        correct: false
+        explanation: >-
+          There is nothing to log. No component in the loop notices the
+          absence.
+      - text: "Because re-fetching is cheap enough that misses do not matter."
+        correct: false
+        explanation: >-
+          Re-fetching cost recency 87.8% of its gross saving, and it is the
+          *good* case.
+
+  - id: q10
+    type: single
+    difficulty: medium
+    prompt: >-
+      `keyed+recency` costs four lines more than a bare window. What does it
+      buy?
+    options:
+      - text: >-
+          Full recall of keyed facts at every distance, while prose recall
+          stays a cliff at the window edge.
+        correct: true
+        explanation: >-
+          It closes exactly one of the two failure classes. Worth knowing
+          precisely, because it is often described as solving the memory
+          problem and it solves half of it.
+      - text: "Full recall of every fact at every distance, at a third of the cost."
+        correct: false
+        explanation: >-
+          Prose facts still fall off at the window edge — 0.000 at distance 8.
+          Nothing short of keeping everything had full recall here.
+      - text: "A lower gross saving but the same recall, so it is a pure loss."
+        correct: false
+        explanation: >-
+          Its gross saving is lower than the bare window's and its net is
+          higher, because it forces far fewer re-fetches.
+      - text: "The ability to re-fetch dropped facts automatically."
+        correct: false
+        explanation: >-
+          Nothing here re-fetches automatically; the re-fetch is a cost charged
+          in the accounting, not a feature of the policy.

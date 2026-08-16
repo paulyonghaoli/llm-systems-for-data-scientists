@@ -1,0 +1,135 @@
+id: agt-l4-timing
+title: "When to compact, not how much"
+lesson: modules/04-agents/04-agent-memory
+description: |
+  Context is re-read before every model call, so tokens removed at step *k* are
+  tokens you stop paying for on each of the remaining steps. That makes the
+  value of one compaction pass a product of two terms pulling in opposite
+  directions: how much has piled up by then, which rises, and how many steps
+  are left to re-read it, which falls.
+
+  Write `compaction_value(sizes, at_step, keep)` — the tokens saved by
+  compacting everything before `at_step` down to a `keep` fraction of its size,
+  once — and `best_step(sizes, keep)`, the step where that is largest.
+
+  The starter returns the saving without multiplying by the steps remaining. It
+  is the natural mistake and it produces a confident wrong answer: the more
+  there is to compact the better, so it always recommends waiting until the
+  end, which is the moment the saving has almost nothing left to multiply by.
+
+  The lesson's author made the opposite error before measuring — assuming
+  earlier is always better, on the reasoning that a saving multiplies by more
+  remaining steps. Both halves are real and neither wins. The last tests here
+  are the two endpoints, which are the fastest way to see that the curve must
+  turn over somewhere in between.
+
+setup_code: |
+  #: Observation sizes in tokens, in the order they arrived.
+  SIZES = [30, 45, 20, 60, 25, 40, 35, 55, 20, 30, 45, 25]
+
+  #: A compactor that keeps a quarter of what it is given.
+  KEEP = 0.25
+
+starter_code: |
+  def compaction_value(sizes, at_step, keep=KEEP):
+      """Tokens saved by compacting everything before `at_step`, once."""
+      accumulated = sum(sizes[:at_step])
+      # Missing the other half: these tokens were going to be re-read on every
+      # remaining step, and removing them saves that many times over.
+      return round(accumulated - accumulated * keep, 2)
+
+
+  def best_step(sizes, keep=KEEP):
+      """The step at which compacting once saves the most."""
+      candidates = range(len(sizes) + 1)
+      return max(candidates, key=lambda k: compaction_value(sizes, k, keep))
+
+
+  for k in range(0, len(SIZES) + 1):
+      print(f"compact at step {k:>2}: saves {compaction_value(SIZES, k):>7.2f} tokens")
+  print(f"best step: {best_step(SIZES)} of {len(SIZES)}")
+
+tests: |
+  # Compacting before anything has happened saves nothing, and compacting after
+  # the last step saves nothing either. Two endpoints, both zero -- so if any
+  # step in between saves anything at all, the curve has an interior maximum.
+  assert compaction_value(SIZES, 0) == 0, (
+      "with nothing accumulated yet there is nothing to compact, so the value "
+      "at step 0 must be exactly 0"
+  )
+  end = compaction_value(SIZES, len(SIZES))
+  assert end == 0, (
+      f"compacting after the final step saved {end}, expected 0. There are no "
+      "remaining steps to re-read the context, so removing tokens from it "
+      "saves nothing at all -- this is the half of the calculation the starter "
+      "is missing, and it is why the starter thinks later is always better."
+  )
+
+  v6 = compaction_value(SIZES, 6)
+  assert abs(v6 - 990.0) < 1e-6, (
+      f"compacting at step 6 came out {v6}, expected 990.0: the first six "
+      "observations total 220 tokens, a quarter is kept so 165 are removed, "
+      "and the six remaining steps each stop paying for them."
+  )
+  assert abs(compaction_value(SIZES, 3) - 641.25) < 1e-6, "step 3: 95 tokens, 9 steps left"
+  assert abs(compaction_value(SIZES, 11) - 303.75) < 1e-6, "step 11: a lot to compact, one step left"
+
+  peak = best_step(SIZES)
+  assert peak == 6, (
+      f"best_step returned {peak}, expected 6 of 12. Value is (tokens "
+      "accumulated) x (steps remaining) -- a rising term times a falling one -- "
+      "so the maximum is in the middle. A version that ignores the remaining "
+      "steps always answers 12, and one that ignores accumulation always "
+      "answers 1; both are confidently wrong at opposite ends."
+  )
+
+  # The curve rises to the peak and falls after it, with no second bump.
+  curve = [compaction_value(SIZES, k) for k in range(len(SIZES) + 1)]
+  assert curve[:peak + 1] == sorted(curve[:peak + 1]), f"not rising to the peak: {curve[:peak + 1]}"
+  assert curve[peak:] == sorted(curve[peak:], reverse=True), f"not falling after it: {curve[peak:]}"
+  assert curve[peak] == max(curve), "the reported peak is not the maximum of the curve"
+
+  # A perfect compactor removes everything; a useless one removes nothing.
+  assert compaction_value(SIZES, 6, keep=0.0) > compaction_value(SIZES, 6, keep=0.25), (
+      "keeping less must save more"
+  )
+  assert compaction_value(SIZES, 6, keep=1.0) == 0, (
+      "a compactor that keeps everything has saved nothing, at any step"
+  )
+
+  # Where the peak sits depends on the workload, not on a universal fraction.
+  front_loaded = [200, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
+  assert best_step(front_loaded) < peak, (
+      f"an episode that dumps a large document at the start should be compacted "
+      f"earlier than one with evenly sized observations, got "
+      f"{best_step(front_loaded)} against {peak}"
+  )
+  back_loaded = [10, 10, 10, 10, 10, 10, 10, 200, 10, 10, 10, 10]
+  assert best_step(back_loaded) > peak, (
+      f"and one whose bulk arrives late should be compacted later, got "
+      f"{best_step(back_loaded)} against {peak}. Note the large observation is "
+      "at index 7 rather than last: bulk that arrives on the final step never "
+      "enters the accumulated total while any steps remain to re-read it, so "
+      "it cannot move the peak at all."
+  )
+
+hints:
+  - "Two factors: `sum(sizes[:at_step])` is one, `len(sizes) - at_step` is the other."
+  - "The tokens removed are `accumulated * (1 - keep)`."
+  - >-
+    `best_step` is already correct once `compaction_value` is; if it still
+    answers 12, the remaining-steps factor is not in there.
+
+solution: |
+  def compaction_value(sizes, at_step, keep=KEEP):
+      """Tokens saved by compacting everything before `at_step`, once."""
+      accumulated = sum(sizes[:at_step])
+      removed = accumulated - accumulated * keep
+      remaining = len(sizes) - at_step
+      return round(removed * remaining, 2)
+
+
+  def best_step(sizes, keep=KEEP):
+      """The step at which compacting once saves the most."""
+      candidates = range(len(sizes) + 1)
+      return max(candidates, key=lambda k: compaction_value(sizes, k, keep))

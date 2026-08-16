@@ -109,3 +109,4 @@ nav:
       - "4.1 The tool-calling protocol": modules/04-agents/01-tool-calling-protocol.md
       - "4.2 The loop and termination": modules/04-agents/02-loop-and-termination.md
       - "4.3 Planning and decomposition": modules/04-agents/03-planning-and-decomposition.md
+      - "4.4 Agent memory": modules/04-agents/04-agent-memory.md
